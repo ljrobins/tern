@@ -6,30 +6,72 @@ let userMarker = null;
 let uncertaintyCircleId = "uncertainty-circle";
 
 let destinationMarker = null; // Global variable to store the destination marker
+
+let longTapTimeout;
+
+// Minimum duration (in milliseconds) to register as a long-tap
+const longTapDuration = 500;
+
+function onTouchStart(event) {
+    if (event.touches.length === 1) {
+        // Start the long-tap timer
+        longTapTimeout = setTimeout(() => {
+            // Get the coordinates of the long-tap
+            const touch = event.touches[0];
+            const boundingRect = map.getCanvas().getBoundingClientRect();
+            const x = touch.clientX - boundingRect.left;
+            const y = touch.clientY - boundingRect.top;
+
+            // Convert screen coordinates to map coordinates
+            const ll = map.unproject([x, y]);
+
+            // Trigger your custom long-tap action
+            computeAndDisplayRoute(ll);
+        }, longTapDuration);
+    }
+}
+
+function onTouchEnd(event) {
+    // Clear the timer if the touch ends before the threshold
+    clearTimeout(longTapTimeout);
+}
+
+function onTouchMove(event) {
+    // Cancel the long-tap if the user moves their finger
+    clearTimeout(longTapTimeout);
+}
+
+function computeAndDisplayRoute(ll) {
+    console.log("Destination set at:", ll);
+
+    // Remove the existing marker if any
+    if (destinationMarker) {
+        destinationMarker.remove();
+    }
+
+    // Create a new marker at the clicked location
+    destinationMarker = new maplibregl.Marker({ color: 'red' })
+        .setLngLat([ll.lng, ll.lat])
+        .addTo(map);
+
+    // Optional: Pan the map to the destination point
+    // map.flyTo({ center: [lngLat.lng, lngLat.lat], zoom: 14 });
+
+    // Optional: Add additional logic here, like sending the destination to the backend
+
+    // Call the route API with start and destination
+    getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [ll.lat, ll.lng]);
+}
+
 function initializeDestinationSelector() {
+    // Add event listeners to detect long-tap
+    map.getCanvas().addEventListener('touchstart', onTouchStart);
+    map.getCanvas().addEventListener('touchend', onTouchEnd);
+    map.getCanvas().addEventListener('touchmove', onTouchMove);
+
     map.on('contextmenu', (e) => {
-        const lngLat = e.lngLat; // Get longitude and latitude of the click
-        console.log("Destination set at:", lngLat);
-    
-        // Remove the existing marker if any
-        if (destinationMarker) {
-            destinationMarker.remove();
-        }
-    
-        // Create a new marker at the clicked location
-        destinationMarker = new maplibregl.Marker({ color: 'red' })
-            .setLngLat([lngLat.lng, lngLat.lat])
-            .addTo(map);
-    
-        // Optional: Pan the map to the destination point
-        // map.flyTo({ center: [lngLat.lng, lngLat.lat], zoom: 14 });
-    
-        // Optional: Add additional logic here, like sending the destination to the backend
-
-        // Call the route API with start and destination
-        getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [lngLat.lat, lngLat.lng]);
-
-    });    
+        computeAndDisplayRoute(e.lngLat)
+    });
 }
 
 function initializeLocationWatch() {
@@ -139,6 +181,6 @@ function updateUserPosition(latitude, longitude, accuracy) {
                 "fill-color": "rgba(195, 9, 9, 0.4)",
             },
         });
+        fitMapToUserLocation(latitude, longitude, 1000);
     }
-    fitMapToUserLocation(latitude, longitude, 1000);
 }

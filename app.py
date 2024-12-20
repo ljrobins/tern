@@ -139,4 +139,5 @@ def get_route():
         return jsonify({'error': 'Failed to get route'}), status_code
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    context = ('cert/server.crt', 'cert/server.key')#certificate and key files
+    socketio.run(app, host='0.0.0.0', debug=True, ssl_context=context)

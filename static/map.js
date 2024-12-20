@@ -2,6 +2,51 @@ let map;
 
 initializeMap()
 
+// Function to zoom to fit an existing layer by name
+function zoomToFitLayer(layerName) {
+    // Get the source associated with the layer
+    const source = map.getSource(layerName);
+
+    if (!source) {
+        console.error(`Layer with name "${layerName}" does not exist.`);
+        return;
+    }
+
+    // Retrieve the GeoJSON data from the source
+    const geojson = source._data; // Access the source data (private API)
+    console.log(geojson)
+
+    // Calculate the bounding box of the GeoJSON
+    const bounds = new maplibregl.LngLatBounds();
+
+    const coords = geojson.geometry.coordinates;
+
+    // Assuming `geojson.geometry` exists and is valid
+    if (geojson.geometry.type === 'LineString') {
+        // Directly iterate over the coordinates for LineString
+        geojson.geometry.coordinates.forEach(coord => bounds.extend(coord));
+    } else if (geojson.geometry.type === 'Polygon') {
+        // For Polygons, iterate over the array of rings
+        geojson.geometry.coordinates.forEach(ring => {
+            ring.forEach(coord => bounds.extend(coord));
+        });
+    } else {
+        console.warn(`Geometry type "${geojson.geometry.type}" is not supported.`);
+    }
+
+    if (bounds.isEmpty()) {
+        console.warn(`No valid features found in the layer "${layerName}".`);
+        return;
+    }
+
+    // Fit the map view to the calculated bounds
+    map.fitBounds(bounds, {
+        padding: 50, // Optional padding (in pixels)
+        maxZoom: 15, // Optional maximum zoom level
+        duration: 1000 // Animation duration (in milliseconds)
+    });
+}
+
 // Function to get the route from Flask API
 function getRoute(start, end) {
     // Start point and end point
@@ -64,6 +109,7 @@ function getRoute(start, end) {
                         }
                     });
                 }
+                zoomToFitLayer('route')
             } else {
                 console.error("Route coordinates are empty or invalid.");
             }
@@ -96,6 +142,112 @@ function addSearchComponent() {
     });
 }
 
+// Function to sync map rotation with the compass
+function syncMapWithCompass() {
+    let compassActive = false;
+    let userInteracting = false;
+    let lastUpdateTime = 0; // Timestamp for throttling updates
+    const throttleInterval = 100; // Minimum interval between updates (milliseconds)
+    let lastBearing = null; // Store the last bearing to check for significant changes
+
+    let currentLatitude = null;
+    let currentLongitude = null;
+
+    // Helper function to calculate bearing from two geo coordinates
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+        const rad = Math.PI / 180;
+        const dLon = (lon2 - lon1) * rad;
+        const lat1Rad = lat1 * rad;
+        const lat2Rad = lat2 * rad;
+
+        const y = Math.sin(dLon) * Math.cos(lat2Rad);
+        const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+
+        let bearing = Math.atan2(y, x) / rad;
+        bearing = (bearing + 360) % 360; // Normalize the bearing to 0-360
+        return bearing;
+    }
+
+    // Update the current device GPS coordinates
+    function updateDeviceLocation(position) {
+        currentLatitude = position.coords.latitude;
+        currentLongitude = position.coords.longitude;
+    }
+
+    // Event handler for device orientation
+    function handleDeviceOrientation(event) {
+        if (compassActive && !userInteracting) {
+            const now = Date.now();
+            if (now - lastUpdateTime < throttleInterval) return; // Skip if within throttle interval
+
+            if (currentLatitude !== null && currentLongitude !== null) {
+                // Get the magnetic heading (alpha) if available
+                const compassHeading = event.alpha; // Compass heading in degrees (0 to 360)
+
+                if (compassHeading != null) {
+                    // Calculate the absolute bearing using GPS and update the map's bearing
+                    const bearing = calculateBearing(currentLatitude, currentLongitude, currentLatitude + 0.0001, currentLongitude); // Small offset to calculate bearing
+                    const adjustedBearing = compassHeading - bearing; // Adjust the bearing for true North
+                    
+                    // Only update if the bearing is significantly different
+                    if (lastBearing === null || Math.abs(adjustedBearing - lastBearing) > 5) { // 5 degrees threshold for change
+                        map.setBearing(adjustedBearing); // Set the new bearing
+                        lastBearing = adjustedBearing; // Update last bearing
+                    }
+                }
+            }
+
+            lastUpdateTime = now; // Update timestamp
+        }
+    }
+
+    // Enable compass sync on map click
+    map.on('click', () => {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS and some modern browsers
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        if (!compassActive) {
+                            window.addEventListener('deviceorientation', handleDeviceOrientation);
+                            compassActive = true;
+                            alert('Compass sync enabled!');
+                        }
+                    } else {
+                        alert('Permission denied for device orientation.');
+                    }
+                })
+                .catch(error => console.error('Error requesting compass permission:', error));
+        } else {
+            // For browsers that don't require explicit permission
+            if (!compassActive) {
+                window.addEventListener('deviceorientation', handleDeviceOrientation);
+                compassActive = true;
+                alert('Compass sync enabled!');
+            }
+        }
+    });
+
+    // Listen for user interactions with the map
+    map.on('mousedown', () => userInteracting = true);
+    map.on('touchstart', () => userInteracting = true);
+    map.on('mouseup', () => userInteracting = false);
+    map.on('touchend', () => userInteracting = false);
+
+    // Allow compass sync to resume after user interaction stops
+    map.on('moveend', () => {
+        if (compassActive && !userInteracting) {
+            lastUpdateTime = 0; // Reset throttling on user action
+        }
+    });
+
+    // Listen to geolocation updates
+    navigator.geolocation.watchPosition(updateDeviceLocation, error => {
+        console.error('Error fetching geolocation:', error);
+    });
+}
+
+
 function initializeMap() {
     map = new maplibregl.Map({
         container: 'map',
@@ -113,6 +265,7 @@ function initializeMap() {
         initializeDestinationSelector();
         addSearchComponent();
         initializeLocationWatch();
+        syncMapWithCompass();
     });
 }
 
