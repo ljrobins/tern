@@ -87,6 +87,20 @@ function getRoute(start, end) {
 
             // Process and display the route
             const route = data.trip;
+            const routeCoordinates = route.shape;
+    
+            // Find the closest point index
+            const closestPointIndex = findClosestPoint(routeCoordinates, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
+
+            // Find the closest point on either the previous or next segment
+            const closestPointOnSegment = findClosestPointOnSegment(routeCoordinates, closestPointIndex, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
+
+            new maplibregl.Marker({ color: "cyan" })
+            .setLngLat([closestPointOnSegment.lng, closestPointOnSegment.lat])
+            .addTo(map);
+
+            console.log(`The closest point is on segment index: ${closestPointOnSegment.index}`);
+            console.log(`Closest point coordinates: ${closestPointOnSegment.lat}, ${closestPointOnSegment.lng}`);
 
             // Step 1: Calculate the maximum length within the route
 
@@ -111,7 +125,7 @@ function getRoute(start, end) {
                 }
 
                 // Generate the color for this segment based on its length
-                const segmentLength = maneuver.length / (maneuver.time+1);
+                const segmentLength = maneuver.length / (maneuver.time + 1);
                 const segmentColor = getColorForLength(segmentLength, maxLength);
 
                 // Add this segment as a feature in the route features array

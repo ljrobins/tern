@@ -69,32 +69,84 @@ function haversine(lat1, lon1, lat2, lon2) {
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Return the distance in km
 }
 
+// Function to calculate the perpendicular distance to a line segment
+function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+    const lineLength = haversine(x1, y1, x2, y2); // Length of the line segment, km
+    const t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / (lineLength * lineLength);
+
+    // Clamp t to the range [0, 1] to ensure we are on the segment
+    const clampedT = Math.max(0, Math.min(1, t));
+
+    // Calculate the closest point on the segment
+    const closestX = x1 + clampedT * (x2 - x1);
+    const closestY = y1 + clampedT * (y2 - y1);
+
+    return { closestX, closestY };
+}
+
 // Function to find the closest point on the route to the current location
 function findClosestPoint(routeCoordinates, currentLat, currentLng) {
-    let minDistance = Infinity; // Initialize minimum distance to a very large number
-    let closestIndex = -1; // Initialize the closest index as invalid
+    let minDistance = Infinity;
+    let closestIndex = -1;
 
-    // Iterate through each coordinate in the route
     routeCoordinates.forEach((coord, index) => {
-        const [lat, lng] = coord;
-        
-        // Calculate the distance from the current location to the current route point
+        const [lng, lat] = coord;
         const distance = haversine(currentLat, currentLng, lat, lng);
 
-        // If the distance is smaller than the current minimum distance, update
         if (distance < minDistance) {
             minDistance = distance;
-            closestIndex = index; // Update the closest point's index
+            closestIndex = index;
         }
     });
 
-    return closestIndex; // Return the index of the closest point
+    return closestIndex;
+}
+
+// Function to find the closest point on either the previous or next segment
+function findClosestPointOnSegment(routeCoordinates, closestIndex, currentLat, currentLng) {
+    let closestSegment = { index: -1, lat: currentLat, lng: currentLng, distance: Infinity };
+
+    // Case when the closest point is at the start of the route (closestIndex == 0)
+    if (closestIndex === 0) {
+        const currCoord = routeCoordinates[closestIndex];
+        const nextCoord = routeCoordinates[closestIndex + 1];
+        const result = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
+        const distance = haversine(currentLat, currentLng, result.closestY, result.closestX);
+        if (distance < closestSegment.distance) {
+            closestSegment = { index: closestIndex + 1, lat: result.closestY, lng: result.closestX, distance };
+        }
+        console.log(result, distance);
+    } else {
+        // Case for closestIndex > 0, check the previous and next segments
+        // Check the segment before the closest point (if exists)
+        const prevCoord = routeCoordinates[closestIndex - 1];
+        const currCoord = routeCoordinates[closestIndex];
+        const resultPrev = pointToSegmentDistance(currentLng, currentLat, prevCoord[0], prevCoord[1], currCoord[0], currCoord[1]);
+        const distancePrev = haversine(currentLat, currentLng, resultPrev.closestY, resultPrev.closestX);
+        if (distancePrev < closestSegment.distance) {
+            closestSegment = { index: closestIndex - 1, lat: resultPrev.closestY, lng: resultPrev.closestX, distance: distancePrev };
+        }
+        console.log(resultPrev, distancePrev);
+
+        // Check the segment after the closest point (if exists)
+        if (closestIndex < routeCoordinates.length - 1) {
+            const nextCoord = routeCoordinates[closestIndex + 1];
+            const resultNext = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
+            const distanceNext = haversine(currentLat, currentLng, resultNext.closestY, resultNext.closestX);
+            if (distanceNext < closestSegment.distance) {
+                closestSegment = { index: closestIndex + 1, lat: resultNext.closestY, lng: resultNext.closestX, distance: distanceNext };
+            }
+            console.log(resultNext, distanceNext);
+        }
+    }
+
+    return closestSegment;
 }
 
 function initializeDestinationSelector() {
