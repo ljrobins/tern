@@ -2,6 +2,23 @@ let map;
 
 initializeMap()
 
+// Function to generate color based on segment length (simple linear scale)
+function getColorForLength(length, maxLength) {
+    // Normalize the length value to a range between 0 and 1
+    const minLength = 0; // Minimum length (adjust this as needed)
+
+    // Normalize the length
+    const normalizedLength = Math.min(Math.max((length - minLength) / (maxLength - minLength), 0), 1);
+
+    // Linear gradient from blue (short segments) to red (long segments)
+    const r = Math.floor(255 * normalizedLength);
+    const g = 0;
+    const b = Math.floor(255 * (1 - normalizedLength));
+
+    return `rgb(${r}, ${g}, ${b})`; // Return the color in RGB format
+}
+
+
 // Function to zoom to fit an existing layer by name
 function zoomToFitLayer(layerName) {
     // Get the source associated with the layer
@@ -14,25 +31,26 @@ function zoomToFitLayer(layerName) {
 
     // Retrieve the GeoJSON data from the source
     const geojson = source._data; // Access the source data (private API)
-    console.log(geojson)
+
+    if (!geojson || geojson.type !== 'FeatureCollection') {
+        console.error(`Source data for "${layerName}" is not a valid GeoJSON FeatureCollection.`);
+        return;
+    }
 
     // Calculate the bounding box of the GeoJSON
     const bounds = new maplibregl.LngLatBounds();
 
-    const coords = geojson.geometry.coordinates;
+    geojson.features.forEach(feature => {
+        const coords = feature.geometry.coordinates;
 
-    // Assuming `geojson.geometry` exists and is valid
-    if (geojson.geometry.type === 'LineString') {
-        // Directly iterate over the coordinates for LineString
-        geojson.geometry.coordinates.forEach(coord => bounds.extend(coord));
-    } else if (geojson.geometry.type === 'Polygon') {
-        // For Polygons, iterate over the array of rings
-        geojson.geometry.coordinates.forEach(ring => {
-            ring.forEach(coord => bounds.extend(coord));
-        });
-    } else {
-        console.warn(`Geometry type "${geojson.geometry.type}" is not supported.`);
-    }
+        if (feature.geometry.type === 'Point') {
+            bounds.extend(coords);
+        } else if (feature.geometry.type === 'LineString' || feature.geometry.type === 'Polygon') {
+            coords.forEach(coord => bounds.extend(coord));
+        } else if (feature.geometry.type === 'MultiPolygon' || feature.geometry.type === 'MultiLineString') {
+            coords.forEach(coord => bounds.extend(coord));
+        }
+    });
 
     if (bounds.isEmpty()) {
         console.warn(`No valid features found in the layer "${layerName}".`);
@@ -69,52 +87,80 @@ function getRoute(start, end) {
 
             // Process and display the route
             const route = data.trip;
-            const routeCoordinates = route.shape;
 
-            if (routeCoordinates.length > 0) {
-                // Check if the route already exists
-                if (map.getSource('route')) {
-                    // If route already exists, update the source with the new coordinates
-                    map.getSource('route').setData({
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: routeCoordinates
-                        }
-                    });
-                } else {
-                    // If the route does not exist, add the source and layer
-                    const geoJSON = {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: routeCoordinates
-                        }
-                    };
+            // Step 1: Calculate the maximum length within the route
 
-                    // Add the route source
-                    map.addSource('route', {
-                        type: 'geojson',
-                        data: geoJSON
-                    });
+            route.legs[0].maneuvers.forEach(maneuver => {
+                console.log(maneuver)
+            });
 
-                    // Add the route layer with corrected 'paint' properties
-                    map.addLayer({
-                        id: 'route',
-                        type: 'line',
-                        source: 'route',
-                        paint: {
-                            'line-width': 4,  // This goes under 'paint', not 'layout'
-                            'line-color': '#ff0000'  // This goes under 'paint', not 'layout'
-                        }
-                    });
+            let maxLength = 0;
+            route.legs[0].maneuvers.forEach(maneuver => {
+                maxLength = Math.max(maxLength, maneuver.length / (maneuver.time + 1));
+            });
+
+            // Group all segments into a single GeoJSON source
+            const routeFeatures = [];
+
+            route.legs[0].maneuvers.forEach((maneuver, i) => {
+                const segmentCoordinates = [];
+
+                // Iterate through the shape indices for this maneuver
+                for (let j = maneuver.begin_shape_index; j <= maneuver.end_shape_index; j++) {
+                    segmentCoordinates.push(route.shape[j]);
                 }
-                zoomToFitLayer('route')
-            } else {
-                console.error("Route coordinates are empty or invalid.");
-            }
 
-        })
+                // Generate the color for this segment based on its length
+                const segmentLength = maneuver.length / (maneuver.time+1);
+                const segmentColor = getColorForLength(segmentLength, maxLength);
+
+                // Add this segment as a feature in the route features array
+                const geoJSONSegment = {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: segmentCoordinates
+                    },
+                    properties: {
+                        color: segmentColor // Store the color for each segment
+                    }
+                };
+
+                routeFeatures.push(geoJSONSegment);
+            });
+
+            // Combine all the features into one GeoJSON object
+            const geoJSON = {
+                type: 'FeatureCollection',
+                features: routeFeatures
+            };
+
+            // Check if the route already exists
+            if (map.getSource('route')) {
+                // If route already exists, update the source with the new coordinates
+                map.getSource('route').setData(geoJSON);
+            } else {
+                // Add the route source (single source for all segments)
+                map.addSource('route', {
+                    type: 'geojson',
+                    data: geoJSON
+                });
+
+                // Add a single route layer with a data-driven style for the color
+                map.addLayer({
+                    id: 'route',
+                    type: 'line',
+                    source: 'route',
+                    paint: {
+                        'line-width': 4,
+                        // Use the 'color' property for the line color
+                        'line-color': ['get', 'color'] // Get the color for each segment from the properties
+                    }
+                });
+            }
+            zoomToFitLayer('route')
+        }
+        )
         .catch(error => {
             console.error('Error fetching route:', error);
             alert("An error occurred while fetching the route.");
@@ -147,58 +193,35 @@ function syncMapWithCompass() {
     let compassActive = false;
     let userInteracting = false;
     let lastUpdateTime = 0; // Timestamp for throttling updates
-    const throttleInterval = 100; // Minimum interval between updates (milliseconds)
+    const throttleInterval = 20; // Minimum interval between updates (milliseconds)
     let lastBearing = null; // Store the last bearing to check for significant changes
-
-    let currentLatitude = null;
-    let currentLongitude = null;
-
-    // Helper function to calculate bearing from two geo coordinates
-    function calculateBearing(lat1, lon1, lat2, lon2) {
-        const rad = Math.PI / 180;
-        const dLon = (lon2 - lon1) * rad;
-        const lat1Rad = lat1 * rad;
-        const lat2Rad = lat2 * rad;
-
-        const y = Math.sin(dLon) * Math.cos(lat2Rad);
-        const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-
-        let bearing = Math.atan2(y, x) / rad;
-        bearing = (bearing + 360) % 360; // Normalize the bearing to 0-360
-        return bearing;
-    }
-
-    // Update the current device GPS coordinates
-    function updateDeviceLocation(position) {
-        currentLatitude = position.coords.latitude;
-        currentLongitude = position.coords.longitude;
-    }
 
     // Event handler for device orientation
     function handleDeviceOrientation(event) {
+        console.log('event', event);
         if (compassActive && !userInteracting) {
             const now = Date.now();
             if (now - lastUpdateTime < throttleInterval) return; // Skip if within throttle interval
 
-            if (currentLatitude !== null && currentLongitude !== null) {
-                // Get the magnetic heading (alpha) if available
-                const compassHeading = event.alpha; // Compass heading in degrees (0 to 360)
+            let compassHeading; // Compass heading in degrees (0 to 360)
 
-                if (compassHeading != null) {
-                    // Calculate the absolute bearing using GPS and update the map's bearing
-                    const bearing = calculateBearing(currentLatitude, currentLongitude, currentLatitude + 0.0001, currentLongitude); // Small offset to calculate bearing
-                    const adjustedBearing = compassHeading - bearing; // Adjust the bearing for true North
-                    
-                    // Only update if the bearing is significantly different
-                    if (lastBearing === null || Math.abs(adjustedBearing - lastBearing) > 5) { // 5 degrees threshold for change
-                        map.setBearing(adjustedBearing); // Set the new bearing
-                        lastBearing = adjustedBearing; // Update last bearing
-                    }
-                }
+            if (event.webkitCompassHeading) {
+                // You may consider adding/distracting landscape/portrait mode value here
+                compassHeading = event.webkitCompassHeading;
+                if (compassHeading < 0) { compassHeading += 360; }
+                if (compassHeading > 360) { compassHeading -= 360; }
+            } else {
+                compassHeading = event.alpha;
             }
 
-            lastUpdateTime = now; // Update timestamp
+            // Only update if the bearing is significantly different
+            if (lastBearing === null || Math.abs(compassHeading - lastBearing) > 1) { // 5 degrees threshold for change
+                map.setBearing(compassHeading); // Set the new bearing
+                lastBearing = compassHeading; // Update last bearing
+            }
         }
+
+        lastUpdateTime = now; // Update timestamp
     }
 
     // Enable compass sync on map click
@@ -287,7 +310,6 @@ function handleSearch(event) {
                     }
 
                     // Update the map with the search results (points)
-                    console.log(map);
                     map.getSource('search-results').setData(data);
 
                     // Fit the map view to the search results

@@ -63,6 +63,40 @@ function computeAndDisplayRoute(ll) {
     getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [ll.lat, ll.lng]);
 }
 
+// Haversine formula to calculate the distance between two lat/lng points
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Return the distance in km
+}
+
+// Function to find the closest point on the route to the current location
+function findClosestPoint(routeCoordinates, currentLat, currentLng) {
+    let minDistance = Infinity; // Initialize minimum distance to a very large number
+    let closestIndex = -1; // Initialize the closest index as invalid
+
+    // Iterate through each coordinate in the route
+    routeCoordinates.forEach((coord, index) => {
+        const [lat, lng] = coord;
+        
+        // Calculate the distance from the current location to the current route point
+        const distance = haversine(currentLat, currentLng, lat, lng);
+
+        // If the distance is smaller than the current minimum distance, update
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = index; // Update the closest point's index
+        }
+    });
+
+    return closestIndex; // Return the index of the closest point
+}
+
 function initializeDestinationSelector() {
     // Add event listeners to detect long-tap
     map.getCanvas().addEventListener('touchstart', onTouchStart);
