@@ -11,6 +11,7 @@ let uncertaintyCircleId = "uncertainty-circle";
 let destinationMarker = null; // Global variable to store the destination marker
 
 let longTapTimeout;
+let userIsRouted = false;
 
 // Minimum duration (in milliseconds) to register as a long-tap
 const longTapDuration = 500;
@@ -45,7 +46,6 @@ function onTouchMove(event) {
 }
 
 function trackUser() {
-    console.log('tracking user');
     if (locationFit.is_fit) { // if not null
         let t = (Date.now() - firstUnixTimestamp) / 1000; // In seconds
         console.log('evaluating fit at', locationFit.coefficientsX, locationFit.coefficientsY, locationFit.points, t);
@@ -63,6 +63,7 @@ function trackUser() {
 }
 
 function computeAndDisplayRoute(ll) {
+    userIsRouted = true;
     console.log("Destination set at:", ll);
 
     // Remove the existing marker if any

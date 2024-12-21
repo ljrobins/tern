@@ -88,6 +88,8 @@ function getRoute(start, end) {
 
             // Process and display the route
             const route = data.trip;
+            processAudioForRouteIncrementally(route)
+
             const routeCoordinates = route.shape;
     
             // Find the closest point index

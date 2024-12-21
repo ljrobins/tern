@@ -1,12 +1,17 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file, send_from_directory
 from flask_socketio import SocketIO, emit
 import urllib.parse
 import urllib.request
 import json
 import polyline
+import os
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+
+# Directory to save audio files
+AUDIO_DIR = "speech-samples"
+os.makedirs(AUDIO_DIR, exist_ok=True)
 
 # Function to send request to the external API
 def send_request(base_url, **params):
@@ -137,6 +142,34 @@ def get_route():
         return jsonify(resp)
     else:
         return jsonify({'error': 'Failed to get route'}), status_code
+
+@app.route('/api/audio')
+def get_audio():
+    return send_file('welcome.wav', mimetype='audio/wav')
+
+# Serve the audio directory so that files can be accessed via a URL
+@app.route('/audio/<filename>')
+def serve_audio(filename):
+    return send_from_directory(AUDIO_DIR, filename, mimetype='audio/wav')
+
+
+# Creating audio
+@app.route('/api/audiogen', methods=['POST'])
+def generate_audio():
+    data = request.json
+    if 'text' not in data:
+        return jsonify({"error": "No text provided"}), 400
+
+    text = data['text']
+    filename = f"{abs(hash(text))}.wav"
+    filepath = os.path.join(AUDIO_DIR, filename)
+
+    # Generate audio if it doesn't already exist
+    if not os.path.exists(filepath):
+        os.system(f"echo '{text}' | piper --model speech-models/en_US-amy-medium.onnx --output_file {filepath}")
+
+    return jsonify({"audio_url": f"/audio/{filename}"}), 200
+
 
 if __name__ == '__main__':
     context = ('cert/server.crt', 'cert/server.key')#certificate and key files
