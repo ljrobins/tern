@@ -1,4 +1,5 @@
 let map;
+let userInteracting = false;
 
 initializeMap()
 
@@ -205,7 +206,6 @@ function addSearchComponent() {
 // Function to sync map rotation with the compass
 function syncMapWithCompass() {
     let compassActive = false;
-    let userInteracting = false;
     let lastUpdateTime = 0; // Timestamp for throttling updates
     const throttleInterval = 20; // Minimum interval between updates (milliseconds)
     let lastBearing = null; // Store the last bearing to check for significant changes
@@ -213,8 +213,16 @@ function syncMapWithCompass() {
     // Event handler for device orientation
     function handleDeviceOrientation(event) {
         console.log('event', event);
+        const now = Date.now();
+        if (compassActive) {
+            // disable map rotation using right click + drag
+            map.dragRotate.disable();
+            // disable map rotation using keyboard
+            map.keyboard.disable();
+            // disable map rotation using touch rotation gesture
+            map.touchZoomRotate.disableRotation();
+        }
         if (compassActive && !userInteracting) {
-            const now = Date.now();
             if (now - lastUpdateTime < throttleInterval) return; // Skip if within throttle interval
 
             let compassHeading; // Compass heading in degrees (0 to 360)
@@ -265,12 +273,6 @@ function syncMapWithCompass() {
         }
     });
 
-    // Listen for user interactions with the map
-    map.on('mousedown', () => userInteracting = true);
-    map.on('touchstart', () => userInteracting = true);
-    map.on('mouseup', () => userInteracting = false);
-    map.on('touchend', () => userInteracting = false);
-
     // Allow compass sync to resume after user interaction stops
     map.on('moveend', () => {
         if (compassActive && !userInteracting) {
@@ -292,10 +294,28 @@ function initializeMap() {
         center: [-119.4179, 36.7783], // Centered on California
         zoom: 5,
     });
+    map.setRenderWorldCopies(false);
     console.log("Map initialized.");
 
     // Add navigation controls to the map
     map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    // Listen for user interactions with the map
+    map.on('mousedown', () => userInteracting = true);
+    map.on('touchstart', () => userInteracting = true);
+    map.on('mouseup', () => userInteracting = false);
+    map.on('touchend', () => userInteracting = false);    
+
+    // Adds the geolocate control
+    // map.addControl(
+    //     new maplibregl.GeolocateControl({
+    //         positionOptions: {
+    //             enableHighAccuracy: true
+    //         },
+    //         trackUserLocation: true,
+    //         showUserLocation: false,
+    //     })
+    // );
 
     // Add a GeoJSON source for search results
     map.on('load', () => {

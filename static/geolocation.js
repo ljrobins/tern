@@ -1,6 +1,9 @@
 // Connect to the WebSocket server
 const socket = io();
 
+let firstUnixTimestamp = null;
+let locationFit = new QuadraticFit();
+
 // Marker and Circle Layer Initialization
 let userMarker = null;
 let uncertaintyCircleId = "uncertainty-circle";
@@ -41,6 +44,24 @@ function onTouchMove(event) {
     clearTimeout(longTapTimeout);
 }
 
+function trackUser() {
+    console.log('tracking user');
+    if (locationFit.is_fit) { // if not null
+        let t = (Date.now() - firstUnixTimestamp) / 1000; // In seconds
+        console.log('evaluating fit at', locationFit.coefficientsX, locationFit.coefficientsY, locationFit.points, t);
+
+        const { x, y } = locationFit.evaluate(t); // Evaluate the quadratic fit at current time
+        console.log(`Evaluated position at ${t}: x=${x}, y=${y}`);
+        map.easeTo({
+            center: [x, y],
+            duration: 90,
+            easing(t) {
+              return t;
+            }
+          });          
+    }
+}
+
 function computeAndDisplayRoute(ll) {
     console.log("Destination set at:", ll);
 
@@ -50,7 +71,7 @@ function computeAndDisplayRoute(ll) {
     }
 
     // Create a new marker at the clicked location
-    destinationMarker = new maplibregl.Marker({ color: 'red' })
+    destinationMarker = new maplibregl.Marker({ color: 'red', draggable: true })
         .setLngLat([ll.lng, ll.lat])
         .addTo(map);
 
@@ -61,6 +82,12 @@ function computeAndDisplayRoute(ll) {
 
     // Call the route API with start and destination
     getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [ll.lat, ll.lng]);
+
+    function onDragEnd() {
+        getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [destinationMarker.getLngLat().lat, destinationMarker.getLngLat().lng]);
+    }
+
+    destinationMarker.on('dragend', onDragEnd);
 }
 
 // Haversine formula to calculate the distance between two lat/lng points
@@ -165,6 +192,12 @@ function initializeLocationWatch() {
     if ("geolocation" in navigator) {
         console.log("Geolocation API is supported.");
 
+        window.setInterval(() => {
+        if (!userInteracting) {
+            trackUser()
+        }
+        }, 100);
+
         // Watch the user's position continuously
         const watchId = navigator.geolocation.watchPosition(
             (data) => {
@@ -172,6 +205,13 @@ function initializeLocationWatch() {
                 const lat = data.coords.latitude;
                 const lon = data.coords.longitude;
                 const acc = data.coords.accuracy;
+                if (firstUnixTimestamp === null) {
+                    firstUnixTimestamp = data.timestamp; // in milliseconds
+                }
+                let t = (data.timestamp - firstUnixTimestamp) / 1000; // in seconds
+                console.log('t', data.timestamp - firstUnixTimestamp);
+
+                locationFit.addPoint(t, lon, lat);
 
                 // Emit geolocation updates to the WebSocket server
                 socket.emit("location_update", { lat, lon, acc });
