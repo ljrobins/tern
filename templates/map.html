@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,21 +9,26 @@
     <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
     <style>
-        body, html {
+        body,
+        html {
             margin: 0;
             padding: 0;
             height: 100%;
         }
+
         #map {
-            width: 100%;
-            height: 100%;
+            height: calc(100% - 44px);
+            /* Adjust height to account for the banner (44px includes 24px font size + 10px padding) */
+            margin-top: 44px;
+            /* Push the map below the banner */
         }
+
         /* Input box styling */
         #search-box {
             position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: 10px;
+            left: 10px;
+            transform: translateX(0%);
             z-index: 1000;
             background-color: white;
             border: 1px solid #ccc;
@@ -31,25 +37,41 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             font-size: 14px;
         }
+
+        #direction-banner {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background-color: black;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 24px;
+            text-align: center;
+            padding: 10px 0;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
     </style>
 </head>
+
 <body>
     <!-- Map Container -->
     <div id="map"></div>
 
     <!-- Search Input Box -->
-    <input
-        type="text"
-        id="search-box"
-        placeholder="Enter address (e.g., 871 Shawnee Ave)"
-        onkeypress="handleSearch(event)"
-    />
+    <input type="text" id="search-box" placeholder="Enter address (e.g., 871 Shawnee Ave)"
+        onkeypress="handleSearch(event)" />
+
+    <div id="direction-banner">
+        Turn left
+    </div>
 
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-    
+
     <script src="{{url_for('static', filename='interpolate.js')}}"></script>
     <script src="{{url_for('static', filename='map.js')}}"></script>
     <script src="{{url_for('static', filename='geolocation.js')}}"></script>
     <script src="{{url_for('static', filename='audio.js')}}"></script>
 </body>
+
 </html>

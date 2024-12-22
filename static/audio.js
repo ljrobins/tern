@@ -1,3 +1,5 @@
+let audioProcessingQueue = [];
+
 async function generateAudioForInstruction(text) {
     try {
         const response = await fetch('/api/audiogen', {
@@ -20,7 +22,7 @@ async function generateAudioForInstruction(text) {
 
 async function processAudioForRouteIncrementally(route) {
     // Create a queue for processing the audio requests
-    const audioQueue = [];
+    audioProcessingQueue = [];
     
     // Push all audio requests into the queue, with the first one prioritized
     route.legs.forEach((leg) => {
@@ -28,7 +30,7 @@ async function processAudioForRouteIncrementally(route) {
             Object.keys(maneuver).forEach((key) => {
                 if (key.endsWith('instruction') && typeof maneuver[key] === 'string') {
                     const text = maneuver[key];
-                    audioQueue.push({ text, maneuver, key });
+                    audioProcessingQueue.push({ text, maneuver, key });
                 }
             });
         });
@@ -37,13 +39,13 @@ async function processAudioForRouteIncrementally(route) {
     // Helper function to process the requests with a delay
     async function processQueue() {
         // Handle the first request immediately (without delay)
-        if (audioQueue.length > 0) {
-            const firstRequest = audioQueue.shift();
+        if (audioProcessingQueue.length > 0) {
+            const firstRequest = audioProcessingQueue.shift();
             await handleAudioRequest(firstRequest.text, firstRequest.maneuver, firstRequest.key);
 
             // Process the rest of the requests with a delay to rate-limit
-            for (let i = 0; i < audioQueue.length; i++) {
-                await handleAudioRequest(audioQueue[i].text, audioQueue[i].maneuver, audioQueue[i].key);
+            for (let i = 0; i < audioProcessingQueue.length; i++) {
+                await handleAudioRequest(audioProcessingQueue[i].text, audioProcessingQueue[i].maneuver, audioProcessingQueue[i].key);
                 // Optional delay between requests (rate limiting)
                 await new Promise(resolve => setTimeout(resolve, 20)); // Adjust delay as needed
             }
@@ -65,4 +67,21 @@ async function processAudioForRouteIncrementally(route) {
 
     // Start processing the queue
     await processQueue();
+}
+
+async function sayPhrase(text) {
+    try {
+        // Generate the audio URL for the given phrase
+        const audioUrl = await generateAudioForInstruction(text);
+
+        if (audioUrl) {
+            // Create an Audio object and play the audio
+            const audio = new Audio(audioUrl);
+            await audio.play(); // Wait for the audio to start playing
+        } else {
+            console.error('Failed to generate audio for the phrase.');
+        }
+    } catch (error) {
+        console.error('Error in sayPhrase:', error);
+    }
 }

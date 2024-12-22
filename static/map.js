@@ -74,8 +74,15 @@ function getRoute(start, end) {
     const endLat = end[0];
     const endLon = end[1];
 
+    if (userHeading < 0) { // if we have not recorded a heading yet, it doesn't matter
+        headingTolerance = 360
+    } else {
+        headingTolerance = 60 // the default value used by Valhalla
+    }
+    console.log(`/api/route?lat_start=${startLat}&lon_start=${startLon}&lat_end=${endLat}&lon_end=${endLon}&heading=${userHeading}&heading_tolerance=${headingTolerance}`)
+
     // Call the Flask API to get the route using fetch
-    fetch(`/api/route?lat_start=${startLat}&lon_start=${startLon}&lat_end=${endLat}&lon_end=${endLon}`)
+    fetch(`/api/route?lat_start=${startLat}&lon_start=${startLon}&lat_end=${endLat}&lon_end=${endLon}&heading=${userHeading}&heading_tolerance=${headingTolerance}`)
         .then(response => response.json())
         .then(data => {
             console.log("Route Response:", data);

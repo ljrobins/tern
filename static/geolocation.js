@@ -7,6 +7,7 @@ let locationFit = new QuadraticFit();
 // Marker and Circle Layer Initialization
 let userMarker = null;
 let uncertaintyCircleId = "uncertainty-circle";
+let gpsStdMeters = null;
 
 let destinationMarker = null; // Global variable to store the destination marker
 let closestPointMarker = null; // Global variable to store the closest point on the route
@@ -14,11 +15,36 @@ let closestPointMarker = null; // Global variable to store the closest point on 
 let longTapTimeout;
 let userIsRouted = false;
 let route = null;
+let userHeading = -1; // nonphysical
+let previousUserMarkerLngLat = null;
 
 // Minimum duration (in milliseconds) to register as a long-tap
 const longTapDuration = 500;
 
 setInterval(trackUser, 1000); // start tracking the user
+
+function computeHeading(lat1, lon1, lat2, lon2) {
+    // Convert latitude and longitude from degrees to radians
+    const radLat1 = (lat1 * Math.PI) / 180;
+    const radLon1 = (lon1 * Math.PI) / 180;
+    const radLat2 = (lat2 * Math.PI) / 180;
+    const radLon2 = (lon2 * Math.PI) / 180;
+
+    // Calculate the difference in longitudes
+    const dLon = radLon2 - radLon1;
+
+    // Compute the initial bearing using the formula
+    const y = Math.sin(dLon) * Math.cos(radLat2);
+    const x =
+        Math.cos(radLat1) * Math.sin(radLat2) -
+        Math.sin(radLat1) * Math.cos(radLat2) * Math.cos(dLon);
+
+    // Convert the result from radians to degrees and normalize it to [0, 360)
+    let heading = (Math.atan2(y, x) * 180) / Math.PI;
+    heading = (heading + 360) % 360;
+
+    return heading; // Heading in degrees
+}
 
 function onTouchStart(event) {
     if (event.touches.length === 1) {
@@ -90,10 +116,38 @@ function maneuverFractionComplete(currentManeuverIndex, closestPointOnSegment) {
     }
 
     // Calculate the fraction of the maneuver completed
-    const fractionCompleteForManeuver = totalDistance / (maneuverLength * 1.609344); // converting maneuverLength from km to mi in the process
+    const fractionCompleteForManeuver = totalDistance / maneuverLength; // converting maneuverLength from km to mi in the process
 
     return fractionCompleteForManeuver; // Clamp to 1 for edge cases
 }
+
+function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex) {
+    
+    if (currentManeuverIndex == 0) {
+        document.getElementById('direction-banner').innerText = `${currentManeuver.instruction.text} (${Math.round(mfComplete * 100)}%)`;
+
+        if (!!currentManeuver.verbal_pre_transition_instruction.audio) {
+            if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+                currentManeuver.verbal_pre_transition_instruction.audio.play()
+            }
+        }
+    }
+
+    if (!!nextManeuver) { // whenever the next maneuver exists
+        if (!!nextManeuver.verbal_pre_transition_instruction.audio) {
+            if ((mfComplete > 0.8) && (nextManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+                nextManeuver.verbal_pre_transition_instruction.audio.play()
+            }
+        }
+    }
+
+    if (!!currentManeuver.verbal_post_transition_instruction.audio) {
+        if ((mfComplete > 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
+            currentManeuver.verbal_post_transition_instruction.audio.play()
+        }
+    }
+}
+
 
 function trackUser() {
     if (!!route) {
@@ -127,34 +181,16 @@ function trackUser() {
 
         console.log(`Closest point in maneuver ${currentManeuverIndex} between points ${closestPointOnSegment.indices} (closer to ${closestPointIndex}): ${closestPointOnSegment.lat}, ${closestPointOnSegment.lng} at a distance ${closestPointOnSegment.distance} km, we are ${closestPointOnSegment.fractionComplete} done with this line segment, ${mfComplete} done with this maneuver`);
 
-        if (currentManeuverIndex == 0) {
-            if (!!currentManeuver.verbal_pre_transition_instruction.audio) {
-                if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
-                    currentManeuver.verbal_pre_transition_instruction.audio.play()
-                }
-            }
-        }
+        readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex);
 
-        if (!!nextManeuver) { // whenever the next maneuver exists
-            if (!!nextManeuver.verbal_pre_transition_instruction.audio) {
-                if ((mfComplete > 0.8) && (nextManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
-                    nextManeuver.verbal_pre_transition_instruction.audio.play()
-                }
-            }
-        }
+        positionStdMiles = gpsStdMeters * 0.0006213712; // converting meters to miles
+        distanceRerouteBoundMiles = 3 * positionStdMiles;
 
-        if (!!currentManeuver.verbal_post_transition_instruction.audio) {
-                if ((mfComplete > 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
-                    currentManeuver.verbal_post_transition_instruction.audio.play()
-                }
+        if (closestPointOnSegment.distance > distanceRerouteBoundMiles) {
+            console.log('time to reroute the user');
+            getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [destinationMarker.getLngLat().lat, destinationMarker.getLngLat().lng]);
+            sayPhrase('Re-routing');
         }
-
-        // if (currentManeuverIndex <= totalManeuvers-2) { // whenever the next maneuver is not the last
-        //     if ((!!nextManeuver) && (mfComplete > 0.8) && (!!nextManeuver.verbal_pre_transition_instruction.audio) && (nextManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
-        //         nextManeuver.verbal_pre_transition_instruction.audio.play()
-        //     }    
-        // }
-        // }
     }
     // if (locationFit.is_fit) { // if not null
     // let t = (Date.now() - firstUnixTimestamp) / 1000; // In seconds
@@ -209,10 +245,9 @@ function haversine(lat1, lon1, lat2, lon2) {
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Return the distance in km
+    return R * c / 1.609344; // Return the distance in miles
 }
 
-// Function to calculate the perpendicular distance to a line segment
 // Function to calculate the perpendicular distance to a line segment
 function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
     // Convert latitude to radians for scaling
@@ -389,13 +424,33 @@ function updateUserPosition(latitude, longitude, accuracy) {
     const coordinates = [longitude, latitude];
     const uncertaintyCircleId = "uncertainty-circle";
 
+    gpsStdMeters = accuracy / 2; // set the position error standard deviation to be used for rerouting
+
     // Update or create the marker
     if (!userMarker) {
         userMarker = new maplibregl.Marker({ color: "blue", draggable: true })
             .setLngLat(coordinates)
             .addTo(map);
+
+        function onDragStart() {
+            previousUserMarkerLngLat = userMarker.getLngLat()
+        }
+        function onDragEnd() {
+            userHeading = computeHeading(previousUserMarkerLngLat.lat, previousUserMarkerLngLat.lng, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
+            console.log('user heading:', userHeading);
+        }
+
+        userMarker.on('dragstart', onDragStart);
+        userMarker.on('dragend', onDragEnd);
+
     } else {
         // userMarker.setLngLat(coordinates);
+        // Update the user's heading
+        distanceTraveled = haversine(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude)
+        if (distanceTraveled > 0.01) {
+            userHeading = computeHeading(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude);
+            console.log('user heading:', userHeading);    
+        }
     }
 
     // Create or update the uncertainty circle

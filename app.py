@@ -85,6 +85,8 @@ def get_route():
     lon_start = float(request.args.get('lon_start'))
     lat_end = float(request.args.get('lat_end'))
     lon_end = float(request.args.get('lon_end'))
+    heading = float(request.args.get('heading'))
+    heading_tolerance = float(request.args.get('heading_tolerance'))
 
     # Base URL without query parameters
     base_url = "http://192.168.4.23:8002/route"
@@ -120,7 +122,7 @@ def get_route():
             },
             "exclude_polygons": [],
             "locations": [
-                {"lon": lon_start, "lat": lat_start, "type": "break"},
+                {"lon": lon_start, "lat": lat_start, "type": "break", "heading": heading, "heading_tolerance": heading_tolerance},
                 {"lon": lon_end, "lat": lat_end, "type": "break"}
             ],
             "directions_options": {"units": "miles"},
@@ -166,6 +168,10 @@ def generate_audio():
 
     # Generate audio if it doesn't already exist
     if not os.path.exists(filepath):
+        r = {"'": "'\"'\"'"}
+        for k,v in r.items():
+            text = text.replace(k, v)
+        print(text)
         os.system(f"echo '{text}' | piper --model speech-models/en_US-amy-medium.onnx --output_file {filepath}")
 
     return jsonify({"audio_url": f"/audio/{filename}"}), 200
