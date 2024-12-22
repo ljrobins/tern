@@ -87,23 +87,8 @@ function getRoute(start, end) {
             }
 
             // Process and display the route
-            const route = data.trip;
+            route = data.trip; // sets it globally
             processAudioForRouteIncrementally(route)
-
-            const routeCoordinates = route.shape;
-    
-            // Find the closest point index
-            const closestPointIndex = findClosestPoint(routeCoordinates, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
-
-            // Find the closest point on either the previous or next segment
-            const closestPointOnSegment = findClosestPointOnSegment(routeCoordinates, closestPointIndex, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
-
-            new maplibregl.Marker({ color: "cyan" })
-            .setLngLat([closestPointOnSegment.lng, closestPointOnSegment.lat])
-            .addTo(map);
-
-            console.log(`The closest point is on segment index: ${closestPointOnSegment.index}`);
-            console.log(`Closest point coordinates: ${closestPointOnSegment.lat}, ${closestPointOnSegment.lng}`);
 
             // Step 1: Calculate the maximum length within the route
 
@@ -327,7 +312,6 @@ function initializeMap() {
         syncMapWithCompass();
     });
 }
-
 
 // Handle search input and send it to the backend
 function handleSearch(event) {

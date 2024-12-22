@@ -123,7 +123,7 @@ def get_route():
                 {"lon": lon_start, "lat": lat_start, "type": "break"},
                 {"lon": lon_end, "lat": lat_end, "type": "break"}
             ],
-            "directions_options": {"units": "kilometers"},
+            "directions_options": {"units": "miles"},
             "id": "valhalla_directions"
         }
     }

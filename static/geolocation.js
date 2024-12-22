@@ -9,12 +9,16 @@ let userMarker = null;
 let uncertaintyCircleId = "uncertainty-circle";
 
 let destinationMarker = null; // Global variable to store the destination marker
+let closestPointMarker = null; // Global variable to store the closest point on the route
 
 let longTapTimeout;
 let userIsRouted = false;
+let route = null;
 
 // Minimum duration (in milliseconds) to register as a long-tap
 const longTapDuration = 500;
+
+setInterval(trackUser, 1000); // start tracking the user
 
 function onTouchStart(event) {
     if (event.touches.length === 1) {
@@ -45,21 +49,54 @@ function onTouchMove(event) {
     clearTimeout(longTapTimeout);
 }
 
-function trackUser() {
-    if (locationFit.is_fit) { // if not null
-        let t = (Date.now() - firstUnixTimestamp) / 1000; // In seconds
-        console.log('evaluating fit at', locationFit.coefficientsX, locationFit.coefficientsY, locationFit.points, t);
+function segmentIndexOfShapeIndex(closestPointIndex) {
+    let segmentIndex = -1;
+    route.legs[0].maneuvers.forEach((maneuver, i) => {
+        if ((closestPointIndex >= maneuver.begin_shape_index) && (closestPointIndex < maneuver.end_shape_index)) {
+            segmentIndex = i;
+        }
+    })
+    return segmentIndex;
+}
 
-        const { x, y } = locationFit.evaluate(t); // Evaluate the quadratic fit at current time
-        console.log(`Evaluated position at ${t}: x=${x}, y=${y}`);
-        map.easeTo({
-            center: [x, y],
-            duration: 90,
-            easing(t) {
-              return t;
-            }
-          });          
+function trackUser() {
+    if (!!route) {
+        // Figure out which segment the user is in
+        const routeCoordinates = route.shape;
+
+        // Find the closest point index
+        const closestPointIndex = findClosestPoint(routeCoordinates, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
+
+        const closestSegmentIndex = segmentIndexOfShapeIndex(closestPointIndex)
+
+        // Find the closest point on either the previous or next segment
+        const closestPointOnSegment = findClosestPointOnSegment(routeCoordinates, closestPointIndex, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
+
+        if (closestPointMarker === null) {
+            closestPointMarker = new maplibregl.Marker({ color: "cyan" })
+                .setLngLat([closestPointOnSegment.lng, closestPointOnSegment.lat])
+                .addTo(map);
+        }
+        else {
+            console.log('setting ll of closestPointMarker')
+            closestPointMarker.setLngLat([closestPointOnSegment.lng, closestPointOnSegment.lat])
+        }
+
+        console.log(`Closest point on seg ${closestSegmentIndex} between points ${closestPointOnSegment.indices} (closer to ${closestPointIndex}): ${closestPointOnSegment.lat}, ${closestPointOnSegment.lng} at a distance ${closestPointOnSegment.distance} km`);
     }
+    // if (locationFit.is_fit) { // if not null
+    // let t = (Date.now() - firstUnixTimestamp) / 1000; // In seconds
+    // console.log('evaluating fit at', locationFit.coefficientsX, locationFit.coefficientsY, locationFit.points, t);
+    // const { x, y } = locationFit.evaluate(t); // Evaluate the quadratic fit at current time
+    // console.log(`Evaluated position at ${t}: x=${x}, y=${y}`);
+    // map.easeTo({
+    //     center: [x, y],
+    //     duration: 90,
+    //     easing(t) {
+    //       return t;
+    //     }
+    //   });          
+    // }
 }
 
 function computeAndDisplayRoute(ll) {
@@ -104,19 +141,33 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 // Function to calculate the perpendicular distance to a line segment
+// Function to calculate the perpendicular distance to a line segment
 function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
-    const lineLength = haversine(x1, y1, x2, y2); // Length of the line segment, km
-    const t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / (lineLength * lineLength);
+    // Convert latitude to radians for scaling
+    const latRadians = (y1 + y2) / 2 * (Math.PI / 180); // Approximate latitude for scaling
+    const cosLat = Math.cos(latRadians); // Scaling factor for longitude
+
+    // Scale x (longitude) values by cos(latitude)
+    const scaledPx = px * cosLat;
+    const scaledX1 = x1 * cosLat;
+    const scaledX2 = x2 * cosLat;
+
+    // Calculate squared length of the line segment
+    const lineLength2 = Math.pow(y2 - y1, 2) + Math.pow(scaledX2 - scaledX1, 2);
+
+    // Projection of the point onto the line segment
+    const t = ((scaledPx - scaledX1) * (scaledX2 - scaledX1) + (py - y1) * (y2 - y1)) / lineLength2;
 
     // Clamp t to the range [0, 1] to ensure we are on the segment
     const clampedT = Math.max(0, Math.min(1, t));
 
     // Calculate the closest point on the segment
-    const closestX = x1 + clampedT * (x2 - x1);
+    const closestX = x1 + clampedT * (x2 - x1); // Use original x values (longitude)
     const closestY = y1 + clampedT * (y2 - y1);
 
     return { closestX, closestY };
 }
+
 
 // Function to find the closest point on the route to the current location
 function findClosestPoint(routeCoordinates, currentLat, currentLng) {
@@ -138,7 +189,7 @@ function findClosestPoint(routeCoordinates, currentLat, currentLng) {
 
 // Function to find the closest point on either the previous or next segment
 function findClosestPointOnSegment(routeCoordinates, closestIndex, currentLat, currentLng) {
-    let closestSegment = { index: -1, lat: currentLat, lng: currentLng, distance: Infinity };
+    let closestSegment = { indices: null, lat: currentLat, lng: currentLng, distance: Infinity };
 
     // Case when the closest point is at the start of the route (closestIndex == 0)
     if (closestIndex === 0) {
@@ -146,10 +197,7 @@ function findClosestPointOnSegment(routeCoordinates, closestIndex, currentLat, c
         const nextCoord = routeCoordinates[closestIndex + 1];
         const result = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
         const distance = haversine(currentLat, currentLng, result.closestY, result.closestX);
-        if (distance < closestSegment.distance) {
-            closestSegment = { index: closestIndex + 1, lat: result.closestY, lng: result.closestX, distance };
-        }
-        console.log(result, distance);
+        closestSegment = { indices: [closestIndex, closestIndex + 1], lat: result.closestY, lng: result.closestX, distance };
     } else {
         // Case for closestIndex > 0, check the previous and next segments
         // Check the segment before the closest point (if exists)
@@ -157,10 +205,7 @@ function findClosestPointOnSegment(routeCoordinates, closestIndex, currentLat, c
         const currCoord = routeCoordinates[closestIndex];
         const resultPrev = pointToSegmentDistance(currentLng, currentLat, prevCoord[0], prevCoord[1], currCoord[0], currCoord[1]);
         const distancePrev = haversine(currentLat, currentLng, resultPrev.closestY, resultPrev.closestX);
-        if (distancePrev < closestSegment.distance) {
-            closestSegment = { index: closestIndex - 1, lat: resultPrev.closestY, lng: resultPrev.closestX, distance: distancePrev };
-        }
-        console.log(resultPrev, distancePrev);
+        closestSegment = { index: [closestIndex - 1, closestIndex], lat: resultPrev.closestY, lng: resultPrev.closestX, distance: distancePrev };
 
         // Check the segment after the closest point (if exists)
         if (closestIndex < routeCoordinates.length - 1) {
@@ -168,9 +213,8 @@ function findClosestPointOnSegment(routeCoordinates, closestIndex, currentLat, c
             const resultNext = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
             const distanceNext = haversine(currentLat, currentLng, resultNext.closestY, resultNext.closestX);
             if (distanceNext < closestSegment.distance) {
-                closestSegment = { index: closestIndex + 1, lat: resultNext.closestY, lng: resultNext.closestX, distance: distanceNext };
+                closestSegment = { index: [closestIndex, closestIndex + 1], lat: resultNext.closestY, lng: resultNext.closestX, distance: distanceNext };
             }
-            console.log(resultNext, distanceNext);
         }
     }
 
@@ -193,12 +237,6 @@ function initializeLocationWatch() {
     if ("geolocation" in navigator) {
         console.log("Geolocation API is supported.");
 
-        window.setInterval(() => {
-        if (!userInteracting) {
-            trackUser()
-        }
-        }, 100);
-
         // Watch the user's position continuously
         const watchId = navigator.geolocation.watchPosition(
             (data) => {
@@ -206,13 +244,12 @@ function initializeLocationWatch() {
                 const lat = data.coords.latitude;
                 const lon = data.coords.longitude;
                 const acc = data.coords.accuracy;
-                if (firstUnixTimestamp === null) {
-                    firstUnixTimestamp = data.timestamp; // in milliseconds
-                }
-                let t = (data.timestamp - firstUnixTimestamp) / 1000; // in seconds
-                console.log('t', data.timestamp - firstUnixTimestamp);
-
-                locationFit.addPoint(t, lon, lat);
+                // if (firstUnixTimestamp === null) {
+                //     firstUnixTimestamp = data.timestamp; // in milliseconds
+                // }
+                // let t = (data.timestamp - firstUnixTimestamp) / 1000; // in seconds
+                // console.log('t', data.timestamp - firstUnixTimestamp);
+                // locationFit.addPoint(t, lon, lat);
 
                 // Emit geolocation updates to the WebSocket server
                 socket.emit("location_update", { lat, lon, acc });
