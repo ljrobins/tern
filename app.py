@@ -39,7 +39,7 @@ def handle_geolocation_update(data):
     if latitude and longitude:
         print(f"Updated Location: Lat: {latitude}, Lon: {longitude}")
         # Emit an acknowledgment (optional)
-        emit("location_ack", {"message": "Location received", "latitude": latitude, "longitude": longitude, "accuracy": accuracy})
+        # emit("location_ack", {"message": "Location received", "latitude": latitude, "longitude": longitude, "accuracy": accuracy})
     else:
         emit("location_ack", {"error": "Invalid location data"})
 

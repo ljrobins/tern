@@ -199,7 +199,6 @@ function syncMapWithCompass() {
 
     // Event handler for device orientation
     function handleDeviceOrientation(event) {
-        console.log('event', event);
         const now = Date.now();
         if (compassActive) {
             // disable map rotation using right click + drag
@@ -291,7 +290,7 @@ function initializeMap() {
     map.on('mousedown', () => userInteracting = true);
     map.on('touchstart', () => userInteracting = true);
     map.on('mouseup', () => userInteracting = false);
-    map.on('touchend', () => userInteracting = false);    
+    map.on('touchend', () => userInteracting = false);
 
     // Adds the geolocate control
     // map.addControl(

@@ -49,14 +49,50 @@ function onTouchMove(event) {
     clearTimeout(longTapTimeout);
 }
 
-function segmentIndexOfShapeIndex(closestPointIndex) {
-    let segmentIndex = -1;
+function maneuverIndexOfShapeIndices(indices) {
+    let maneuverIndex = -1;
     route.legs[0].maneuvers.forEach((maneuver, i) => {
-        if ((closestPointIndex >= maneuver.begin_shape_index) && (closestPointIndex < maneuver.end_shape_index)) {
-            segmentIndex = i;
+        if ((indices[0] >= maneuver.begin_shape_index) && (indices[1] >= maneuver.begin_shape_index)) {
+            if ((indices[0] <= maneuver.end_shape_index) && (indices[1] <= maneuver.end_shape_index)) {
+                maneuverIndex = i;
+            }
         }
     })
-    return segmentIndex;
+    return maneuverIndex;
+}
+
+// Function to calculate the fraction of the current maneuver that has been completed
+function maneuverFractionComplete(currentManeuverIndex, closestPointOnSegment) {
+    const routeCoordinates = route.shape;
+    const maneuver = route.legs[0].maneuvers[currentManeuverIndex];
+    const { begin_shape_index, end_shape_index, length: maneuverLength } = maneuver;
+    const { indices, fractionComplete } = closestPointOnSegment;
+
+    // Total distance covered in the maneuver so far
+    let totalDistance = 0;
+
+    // Iterate over route coordinates within the maneuver's shape indices
+    for (let i = begin_shape_index; i < end_shape_index; i++) {
+        // Stop if we reach the closest segment
+        if (i === indices[0]) {
+            // Add the fractionComplete of the current segment
+            const [lngStart, latStart] = routeCoordinates[indices[0]];
+            const [lngEnd, latEnd] = routeCoordinates[indices[1]];
+            totalDistance += haversine(latStart, lngStart, latEnd, lngEnd) * fractionComplete;
+            break;
+        }
+
+        const [lng1, lat1] = routeCoordinates[i];
+        const [lng2, lat2] = routeCoordinates[i + 1];
+
+        // Add the segment distance
+        totalDistance += haversine(lat1, lng1, lat2, lng2);
+    }
+
+    // Calculate the fraction of the maneuver completed
+    const fractionCompleteForManeuver = totalDistance / (maneuverLength * 1.609344); // converting maneuverLength from km to mi in the process
+
+    return fractionCompleteForManeuver; // Clamp to 1 for edge cases
 }
 
 function trackUser() {
@@ -67,10 +103,18 @@ function trackUser() {
         // Find the closest point index
         const closestPointIndex = findClosestPoint(routeCoordinates, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
 
-        const closestSegmentIndex = segmentIndexOfShapeIndex(closestPointIndex)
-
         // Find the closest point on either the previous or next segment
         const closestPointOnSegment = findClosestPointOnSegment(routeCoordinates, closestPointIndex, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
+
+        const currentManeuverIndex = maneuverIndexOfShapeIndices(closestPointOnSegment.indices)
+        const currentManeuver = route.legs[0].maneuvers[currentManeuverIndex];
+        let nextManeuver = null;
+        const totalManeuvers = route.legs[0].maneuvers.length;
+        if (currentManeuverIndex < totalManeuvers - 1) {
+            nextManeuver = route.legs[0].maneuvers[currentManeuverIndex + 1];
+        }
+
+        const mfComplete = maneuverFractionComplete(currentManeuverIndex, closestPointOnSegment);
 
         if (closestPointMarker === null) {
             closestPointMarker = new maplibregl.Marker({ color: "cyan" })
@@ -78,11 +122,39 @@ function trackUser() {
                 .addTo(map);
         }
         else {
-            console.log('setting ll of closestPointMarker')
             closestPointMarker.setLngLat([closestPointOnSegment.lng, closestPointOnSegment.lat])
         }
 
-        console.log(`Closest point on seg ${closestSegmentIndex} between points ${closestPointOnSegment.indices} (closer to ${closestPointIndex}): ${closestPointOnSegment.lat}, ${closestPointOnSegment.lng} at a distance ${closestPointOnSegment.distance} km`);
+        console.log(`Closest point in maneuver ${currentManeuverIndex} between points ${closestPointOnSegment.indices} (closer to ${closestPointIndex}): ${closestPointOnSegment.lat}, ${closestPointOnSegment.lng} at a distance ${closestPointOnSegment.distance} km, we are ${closestPointOnSegment.fractionComplete} done with this line segment, ${mfComplete} done with this maneuver`);
+
+        if (currentManeuverIndex == 0) {
+            if (!!currentManeuver.verbal_pre_transition_instruction.audio) {
+                if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+                    currentManeuver.verbal_pre_transition_instruction.audio.play()
+                }
+            }
+        }
+
+        if (!!nextManeuver) { // whenever the next maneuver exists
+            if (!!nextManeuver.verbal_pre_transition_instruction.audio) {
+                if ((mfComplete > 0.8) && (nextManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+                    nextManeuver.verbal_pre_transition_instruction.audio.play()
+                }
+            }
+        }
+
+        if (!!currentManeuver.verbal_post_transition_instruction.audio) {
+                if ((mfComplete > 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
+                    currentManeuver.verbal_post_transition_instruction.audio.play()
+                }
+        }
+
+        // if (currentManeuverIndex <= totalManeuvers-2) { // whenever the next maneuver is not the last
+        //     if ((!!nextManeuver) && (mfComplete > 0.8) && (!!nextManeuver.verbal_pre_transition_instruction.audio) && (nextManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+        //         nextManeuver.verbal_pre_transition_instruction.audio.play()
+        //     }    
+        // }
+        // }
     }
     // if (locationFit.is_fit) { // if not null
     // let t = (Date.now() - firstUnixTimestamp) / 1000; // In seconds
@@ -165,7 +237,7 @@ function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
     const closestX = x1 + clampedT * (x2 - x1); // Use original x values (longitude)
     const closestY = y1 + clampedT * (y2 - y1);
 
-    return { closestX, closestY };
+    return { closestX, closestY, clampedT };
 }
 
 
@@ -197,23 +269,23 @@ function findClosestPointOnSegment(routeCoordinates, closestIndex, currentLat, c
         const nextCoord = routeCoordinates[closestIndex + 1];
         const result = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
         const distance = haversine(currentLat, currentLng, result.closestY, result.closestX);
-        closestSegment = { indices: [closestIndex, closestIndex + 1], lat: result.closestY, lng: result.closestX, distance };
+        closestSegment = { indices: [closestIndex, closestIndex + 1], lat: result.closestY, lng: result.closestX, distance: distance, fractionComplete: result.clampedT };
     } else {
         // Case for closestIndex > 0, check the previous and next segments
         // Check the segment before the closest point (if exists)
         const prevCoord = routeCoordinates[closestIndex - 1];
         const currCoord = routeCoordinates[closestIndex];
-        const resultPrev = pointToSegmentDistance(currentLng, currentLat, prevCoord[0], prevCoord[1], currCoord[0], currCoord[1]);
-        const distancePrev = haversine(currentLat, currentLng, resultPrev.closestY, resultPrev.closestX);
-        closestSegment = { index: [closestIndex - 1, closestIndex], lat: resultPrev.closestY, lng: resultPrev.closestX, distance: distancePrev };
+        const result = pointToSegmentDistance(currentLng, currentLat, prevCoord[0], prevCoord[1], currCoord[0], currCoord[1]);
+        const distance = haversine(currentLat, currentLng, result.closestY, result.closestX);
+        closestSegment = { indices: [closestIndex - 1, closestIndex], lat: result.closestY, lng: result.closestX, distance: distance, fractionComplete: result.clampedT };
 
         // Check the segment after the closest point (if exists)
         if (closestIndex < routeCoordinates.length - 1) {
             const nextCoord = routeCoordinates[closestIndex + 1];
-            const resultNext = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
-            const distanceNext = haversine(currentLat, currentLng, resultNext.closestY, resultNext.closestX);
-            if (distanceNext < closestSegment.distance) {
-                closestSegment = { index: [closestIndex, closestIndex + 1], lat: resultNext.closestY, lng: resultNext.closestX, distance: distanceNext };
+            const result = pointToSegmentDistance(currentLng, currentLat, currCoord[0], currCoord[1], nextCoord[0], nextCoord[1]);
+            const distance = haversine(currentLat, currentLng, result.closestY, result.closestX);
+            if (distance < closestSegment.distance) {
+                closestSegment = { indices: [closestIndex, closestIndex + 1], lat: result.closestY, lng: result.closestX, distance: distance, fractionComplete: result.clampedT };
             }
         }
     }
@@ -255,7 +327,7 @@ function initializeLocationWatch() {
                 socket.emit("location_update", { lat, lon, acc });
 
                 // Listen for location updates from the server
-                console.log("Location update:", data);
+                // console.log("Location update:", data);
 
                 // Update map with user's position and uncertainty
                 updateUserPosition(lat, lon, acc);
@@ -319,11 +391,11 @@ function updateUserPosition(latitude, longitude, accuracy) {
 
     // Update or create the marker
     if (!userMarker) {
-        userMarker = new maplibregl.Marker({ color: "blue" })
+        userMarker = new maplibregl.Marker({ color: "blue", draggable: true })
             .setLngLat(coordinates)
             .addTo(map);
     } else {
-        userMarker.setLngLat(coordinates);
+        // userMarker.setLngLat(coordinates);
     }
 
     // Create or update the uncertainty circle
