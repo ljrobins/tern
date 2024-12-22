@@ -17,9 +17,9 @@
         }
 
         #map {
-            height: calc(100% - 44px);
+            height: calc(100% - 75px);
             /* Adjust height to account for the banner (44px includes 24px font size + 10px padding) */
-            margin-top: 44px;
+            margin-top: 75px;
             /* Push the map below the banner */
         }
 
@@ -50,6 +50,25 @@
             padding: 10px 0;
             z-index: 1000;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            height: 60px; /* Adjust height to fit two lines */
+            /* Adjust height dynamically based on content */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #direction-string {
+            font-size: 24px;
+            /* Main instruction size */
+            font-weight: bold;
+        }
+
+        #maneuver-stats {
+            font-size: 18px;
+            /* Stats size, slightly smaller */
+            margin-top: 5px;
+            /* Spacing between lines */
         }
     </style>
 </head>
@@ -63,7 +82,8 @@
         onkeypress="handleSearch(event)" />
 
     <div id="direction-banner">
-        Turn left
+        <div id="direction-string"></div>
+        <div id="maneuver-stats"></div>
     </div>
 
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>

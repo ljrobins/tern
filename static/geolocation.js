@@ -17,6 +17,7 @@ let userIsRouted = false;
 let route = null;
 let userHeading = -1; // nonphysical
 let previousUserMarkerLngLat = null;
+let directionLine = null;
 
 // Minimum duration (in milliseconds) to register as a long-tap
 const longTapDuration = 500;
@@ -121,13 +122,12 @@ function maneuverFractionComplete(currentManeuverIndex, closestPointOnSegment) {
     return fractionCompleteForManeuver; // Clamp to 1 for edge cases
 }
 
-function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex) {
-    
+function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex) {    
     if (currentManeuverIndex == 0) {
-        document.getElementById('direction-banner').innerText = `${currentManeuver.instruction.text} (${Math.round(mfComplete * 100)}%)`;
 
         if (!!currentManeuver.verbal_pre_transition_instruction.audio) {
             if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+                directionLine = `${currentManeuver.instruction.text}`;
                 currentManeuver.verbal_pre_transition_instruction.audio.play()
             }
         }
@@ -143,8 +143,14 @@ function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuv
 
     if (!!currentManeuver.verbal_post_transition_instruction.audio) {
         if ((mfComplete > 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
+            directionLine = `${currentManeuver.verbal_post_transition_instruction.text}`;
             currentManeuver.verbal_post_transition_instruction.audio.play()
         }
+    }
+
+    if (!!directionLine) {
+        document.getElementById('direction-string').innerText = directionLine
+        document.getElementById('maneuver-stats').innerText = `(${Math.round(mfComplete * 100)}%)`    
     }
 }
 
@@ -444,7 +450,7 @@ function updateUserPosition(latitude, longitude, accuracy) {
         userMarker.on('dragend', onDragEnd);
 
     } else {
-        // userMarker.setLngLat(coordinates);
+        userMarker.setLngLat(coordinates);
         // Update the user's heading
         distanceTraveled = haversine(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude)
         if (distanceTraveled > 0.01) {
