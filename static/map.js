@@ -168,6 +168,7 @@ function getRoute(start, end) {
                 });
             }
             zoomToFitLayer('route')
+            isRerouting = false;
         }
         )
         .catch(error => {

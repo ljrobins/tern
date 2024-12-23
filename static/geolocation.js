@@ -14,6 +14,7 @@ let closestPointMarker = null; // Global variable to store the closest point on 
 
 let longTapTimeout;
 let userIsRouted = false;
+let isRerouting = false;
 let route = null;
 let userHeading = -1; // nonphysical
 let previousUserMarkerLngLat = null;
@@ -125,34 +126,43 @@ function maneuverFractionComplete(currentManeuverIndex, closestPointOnSegment) {
     return fractionCompleteForManeuver; // Clamp to 1 for edge cases
 }
 
-function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex) {    
+function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex) {
     if (currentManeuverIndex == 0) {
         if (!!currentManeuver.verbal_pre_transition_instruction.audio) {
-            if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
+            if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0) && !currentManeuver.verbal_pre_transition_instruction.audio.queued) {
+                // note the addition of a not queued check to handle the case when multiple reroutes happen in short succession
                 directionLine = `${currentManeuver.instruction.text}`;
-                currentManeuver.verbal_pre_transition_instruction.audio.play()
+                enqueueAudioRequest(currentManeuver.verbal_pre_transition_instruction.audio);
             }
         }
+
+        if (!!currentManeuver.verbal_post_transition_instruction.audio) {
+            if ((mfComplete > 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
+                directionLine = `${currentManeuver.verbal_post_transition_instruction.text}`;
+                enqueueAudioRequest(currentManeuver.verbal_post_transition_instruction.audio);
+            }
+        }
+    } else {
+        if (!!currentManeuver.verbal_post_transition_instruction.audio) {
+            if ((mfComplete < 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
+                directionLine = `${currentManeuver.verbal_post_transition_instruction.text}`;
+                enqueueAudioRequest(currentManeuver.verbal_post_transition_instruction.audio);
+            }
+        }    
     }
 
     if (!!nextManeuver) { // whenever the next maneuver exists
         if (!!nextManeuver.verbal_pre_transition_instruction.audio) {
             if ((mfComplete > 0.8) && (nextManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
-                nextManeuver.verbal_pre_transition_instruction.audio.play()
+                enqueueAudioRequest(nextManeuver.verbal_pre_transition_instruction.audio);
+                directionLine = `${nextManeuver.verbal_pre_transition_instruction.text}`;
             }
-        }
-    }
-
-    if (!!currentManeuver.verbal_post_transition_instruction.audio) {
-        if ((mfComplete > 0.1) && (currentManeuver.verbal_post_transition_instruction.audio.played.length == 0)) {
-            directionLine = `${currentManeuver.verbal_post_transition_instruction.text}`;
-            currentManeuver.verbal_post_transition_instruction.audio.play()
         }
     }
 
     if (!!directionLine) {
         document.getElementById('direction-string').innerText = directionLine
-        document.getElementById('maneuver-stats').innerText = `(${Math.round(mfComplete * 100)}%)`    
+        document.getElementById('maneuver-stats').innerText = `(${Math.round(mfComplete * 100)}%)`
     }
 }
 
@@ -195,10 +205,11 @@ function trackUser() {
 
         positionStdMiles = gpsStdMeters * METERS_TO_MILES; // converting meters to miles
 
-        if ((closestPointOnSegment.distance > 10 * positionStdMiles) && (closestDistanceEver < 1 * positionStdMiles)) {
+        if ((closestPointOnSegment.distance > 10 * positionStdMiles) && (closestDistanceEver < 1 * positionStdMiles) && (!isRerouting)) {
             console.log('time to reroute the user');
             getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [destinationMarker.getLngLat().lat, destinationMarker.getLngLat().lng]);
             sayPhrase('Re-routing');
+            isRerouting = true;
         }
     }
     // if (locationFit.is_fit) { // if not null
@@ -458,7 +469,7 @@ function updateUserPosition(latitude, longitude, accuracy) {
         distanceTraveled = haversine(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude)
         if (distanceTraveled > headingUpdateDistanceMiles) {
             userHeading = computeHeading(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude);
-            console.log('Updated heading:', userHeading);    
+            console.log('Updated heading:', userHeading);
         }
     }
 

@@ -1,5 +1,61 @@
 let audioProcessingQueue = [];
 
+// Queue to hold the audio requests
+const audioPlayQueue = [];
+let isQueueProcessing = false;  // Flag to check if the queue is already being processed
+
+// The interval between audio plays in milliseconds (e.g., 1000ms = 1 second)
+const audioPlayInterval = 1000;
+
+// Helper function to mark an audio as queued
+function markAudioAsQueued(audioRequest) {
+    audioRequest.queued = true;  // Set the queued flag to true
+}
+
+// Function to enqueue audio request only if not already queued
+function enqueueAudioRequest(audioElement) {
+    // Check if the audio already has a 'queued' flag and if it's already queued
+    if (audioElement.queued) {
+        return;  // Skip if already queued
+    }
+
+    // Mark the audio as queued
+    markAudioAsQueued(audioElement);
+
+    // Add the audio to the queue
+    audioPlayQueue.push(audioElement);
+
+    // Start processing the queue if it's not already being processed
+    if (!isQueueProcessing) {
+        processAudioQueue();  // Automatically start processing
+    }
+}
+
+// Function to process the audio play queue
+async function processAudioQueue() {
+    isQueueProcessing = true;  // Mark that the queue is being processed
+
+    // Process each audio request in the queue
+    while (audioPlayQueue.length > 0) {
+        const audioElement = audioPlayQueue.shift();  // Get and remove the first audio element in the queue
+        // console.log(audioPlayQueue.length, audioElement)
+        // Play the audio
+        audioElement.play();
+
+        // Wait for the audio to finish before proceeding to the next one
+        await new Promise(resolve => {
+            audioElement.onended = resolve; // Resolve when the audio finishes
+        });
+
+        // Wait for the specified interval before playing the next audio
+        if (audioPlayQueue.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, audioPlayInterval));
+        }
+    }
+
+    isQueueProcessing = false;  // Mark the queue as processed
+}
+
 async function generateAudioForInstructions(texts) {
     try {
         const response = await fetch('/api/audiogen', {
@@ -110,7 +166,7 @@ async function sayPhrase(text) {
         if (audioUrls && audioUrls[0]) {
             // Create an Audio object and play the audio
             const audio = new Audio(audioUrls[0]);
-            await audio.play(); // Wait for the audio to start playing
+            enqueueAudioRequest(audio);
         } else {
             console.error('Failed to generate audio for the phrase.');
         }
