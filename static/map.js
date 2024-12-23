@@ -284,8 +284,8 @@ function initializeMap() {
     map = new maplibregl.Map({
         container: 'map',
         style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-        center: [-119.4179, 36.7783], // Centered on California
-        zoom: 5,
+        center: [-69.6031164027294, 43.82318691477213], // Centered on California
+        zoom: 12,
     });
     map.setRenderWorldCopies(false);
     console.log("Map initialized.");

@@ -208,11 +208,6 @@ def get_route():
         return jsonify({"error": "Failed to get route"}), status_code
 
 
-@app.route("/api/audio")
-def get_audio():
-    return send_file("welcome.wav", mimetype="audio/wav")
-
-
 # Serve the audio directory so that files can be accessed via a URL
 @app.route("/audio/<filename>")
 def serve_audio(filename):
@@ -222,37 +217,48 @@ def serve_audio(filename):
 @app.route("/api/audiogen", methods=["POST"])
 def generate_audio():
     data = request.json
-    if "text" not in data:
-        return jsonify({"error": "No text provided"}), 400
+    if "texts" not in data or not isinstance(data["texts"], list):
+        return jsonify({"error": "Invalid input. Provide a 'texts' array."}), 400
 
-    text = data["text"]
-    task_id = abs(hash(text))  # Unique ID for this audio generation task
-    filename = f"{task_id}.wav"
-    filepath = os.path.join(AUDIO_DIR, filename)
+    texts = data["texts"]
+    json_inputs = []
+    audio_urls = []
 
-    # If file already exists, no need to regenerate
-    if os.path.exists(filepath):
-        return jsonify({"audio_url": f"/audio/{filename}"}), 200
+    total_words = 0
+
+    for text in texts:
+        task_id = abs(hash(text))
+
+        filename = f"{task_id}.wav"
+        filepath = os.path.join(AUDIO_DIR, filename)
+
+        # If file already exists, no need to regenerate
+        if os.path.exists(filepath):
+            audio_urls.append(f"/audio/{filename}")
+            continue
+
+        # Create JSON input for piper
+        json_inputs.append(f'{{"text": "{text}", "output_file": "{filepath}"}}')
+        audio_urls.append(f"/audio/{filename}")
+        total_words += len(text.split(' '))
+
+    if not json_inputs:
+        # All files already exist, return their URLs
+        return jsonify({"audio_urls": audio_urls}), 200
+
+    # printing the total words in all of the input
+    print(f'Generating {total_words} total words of audio...')
 
     try:
-        # Escape special characters in the text
-        r = {"'": "'\"'\"'"}
-        for k, v in r.items():
-            text = text.replace(k, v)
+        # Concatenate all JSON inputs and pass them to piper
+        json_input_str = "\n".join(json_inputs)
+        command = f"echo '{json_input_str}' | piper/install/piper --model speech-models/en_US-amy-low.onnx --json-input"
+        os.system(command)
 
-        print(f"Generating audio for: {text}")
-
-        # Launch the process
-        process = subprocess.Popen(
-            f"echo '{text}' | piper --model speech-models/en_US-amy-medium.onnx --output_file {filepath}",
-            shell=True,
-        )
-
-        # Return the audio file URL
-        return jsonify({"audio_url": f"/audio/{filename}"}), 200
+        return jsonify({"audio_urls": audio_urls}), 200
 
     except Exception as e:
-        print(e)
+        print(f"Error during audio generation: {e}")
         return jsonify({"error": str(e)}), 500
 
 

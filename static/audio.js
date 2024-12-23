@@ -1,11 +1,11 @@
 let audioProcessingQueue = [];
 
-async function generateAudioForInstruction(text) {
+async function generateAudioForInstructions(texts) {
     try {
         const response = await fetch('/api/audiogen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ texts }), // Send all texts as an array
         });
 
         if (!response.ok) {
@@ -13,64 +13,79 @@ async function generateAudioForInstruction(text) {
         }
 
         const data = await response.json();
-        return data.audio_url; // Return the audio URL
+        return data.audio_urls; // Return the array of audio URLs
     } catch (error) {
-        console.error('Error in generateAudioForInstruction:', error);
+        console.error('Error in generateAudioForInstructions:', error);
         return null; // Handle errors gracefully
     }
 }
 
-// Helper function to process the requests with a delay
-async function processQueue() {
-    // Handle the first request immediately (without delay)
-    if (audioProcessingQueue.length > 0) {
-        const firstRequest = audioProcessingQueue.shift();
-        await handleAudioRequest(firstRequest.text, firstRequest.maneuver, firstRequest.key);
+// Cache to store audio data for already processed texts
+const audioCache = {};
 
-        // Process the rest of the requests with a delay to rate-limit
-        for (let i = 0; i < audioProcessingQueue.length; i++) {
-            await handleAudioRequest(audioProcessingQueue[i].text, audioProcessingQueue[i].maneuver, audioProcessingQueue[i].key);
-            // Optional delay between requests (rate limiting)
-            // await new Promise(resolve => setTimeout(resolve, 20)); // Adjust delay as needed
+// Helper function to process the queue in batches
+async function processQueue() {
+    if (audioProcessingQueue.length === 0) {
+        return; // Nothing to process
+    }
+
+    // Prepare lists of unique texts and map them
+    const uniqueTexts = [];
+    const requestMap = {};
+
+    audioProcessingQueue.forEach((req, index) => {
+        if (!audioCache[req.text]) {
+            // If the text is not in the cache, queue it for generation
+            if (!requestMap[req.text]) {
+                uniqueTexts.push(req.text); // Add only unique texts for processing
+                requestMap[req.text] = [];
+            }
+            requestMap[req.text].push({ index, maneuver: req.maneuver, key: req.key });
+        } else {
+            // If the text is already in the cache, clone the cached audio
+            const cachedAudio = audioCache[req.text];
+
+            // Create a new Audio element using the same audioUrl to ensure it behaves independently
+            const copiedAudio = new Audio(cachedAudio.audioUrl);
+            copiedAudio.load(); // Start loading the new audio element
+            req.maneuver[req.key] = { text: req.text, audioUrl: cachedAudio.audioUrl, audio: copiedAudio };
+        }
+    });
+
+    if (uniqueTexts.length > 0) {
+        // Generate audio for all unique texts in one batch
+        const audioUrls = await generateAudioForInstructions(uniqueTexts);
+
+        if (audioUrls) {
+            audioUrls.forEach((audioUrl, index) => {
+                if (audioUrl) {
+                    const text = uniqueTexts[index];
+                    const requests = requestMap[text];
+
+                    // Cache the audio data (keep the audioUrl and audio)
+                    const audio = new Audio(audioUrl);
+                    audio.load(); // Start loading the audio
+                    audioCache[text] = { audioUrl, audio };
+
+                    // Update all maneuvers with the generated audio
+                    requests.forEach(({ maneuver, key }) => {
+                        maneuver[key] = { text, audioUrl, audio };
+                    });
+                }
+            });
+        } else {
+            console.error('Failed to generate audio for some or all unique texts.');
         }
     }
-}
 
-// Function to handle each individual audio request
-async function handleAudioRequest(text, maneuver, key) {
-    // Generate audio asynchronously
-    const audioUrl = await generateAudioForInstruction(text);
-    if (audioUrl) {
-        // Update the maneuver with the generated audio
-        const audio = new Audio(audioUrl);
-        audio.load(); // Start loading the audio
-        maneuver[key] = { text: text, audioUrl: audioUrl, audio: audio };
-        // maneuver[key].audio.play(); // to make a lovely chorus
-    }
-}
-
-async function cancelAudioGeneration(text) {
-    try {
-        const response = await fetch('/api/audiogen/cancelall', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({  }),
-        });
-
-        const result = await response.json();
-        console.log(`Cancellation: ${result.message}`);
-    } catch (error) {
-        console.error(`Error canceling audio generation for "${text}":`, error);
-    }
+    // Clear the queue after processing
+    audioProcessingQueue = [];
 }
 
 async function processAudioForRouteIncrementally(route) {
-    // Cancel pending requests before starting new ones
-    await cancelAudioGeneration();
-
     // Reset the audio queue for the new route
     audioProcessingQueue = [];
-    
+
     // Push all audio requests into the queue
     route.legs.forEach((leg) => {
         leg.maneuvers.forEach((maneuver) => {
@@ -83,18 +98,18 @@ async function processAudioForRouteIncrementally(route) {
         });
     });
 
-    // Process the new audio queue incrementally
+    // Process the audio queue in a batch
     await processQueue();
 }
 
 async function sayPhrase(text) {
     try {
         // Generate the audio URL for the given phrase
-        const audioUrl = await generateAudioForInstruction(text);
+        const audioUrls = await generateAudioForInstructions([text]);
 
-        if (audioUrl) {
+        if (audioUrls && audioUrls[0]) {
             // Create an Audio object and play the audio
-            const audio = new Audio(audioUrl);
+            const audio = new Audio(audioUrls[0]);
             await audio.play(); // Wait for the audio to start playing
         } else {
             console.error('Failed to generate audio for the phrase.');

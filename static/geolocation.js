@@ -127,7 +127,6 @@ function maneuverFractionComplete(currentManeuverIndex, closestPointOnSegment) {
 
 function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex) {    
     if (currentManeuverIndex == 0) {
-
         if (!!currentManeuver.verbal_pre_transition_instruction.audio) {
             if ((mfComplete < 0.1) && (currentManeuver.verbal_pre_transition_instruction.audio.played.length == 0)) {
                 directionLine = `${currentManeuver.instruction.text}`;
