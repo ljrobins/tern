@@ -315,7 +315,7 @@ function initializeMap() {
         initializeDestinationSelector();
         addSearchComponent();
         initializeLocationWatch();
-        syncMapWithCompass();
+        // syncMapWithCompass();
     });
 }
 

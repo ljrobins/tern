@@ -2,3 +2,5 @@ flask
 flask-socketio
 polyline
 piper-tts
+celery
+redis

@@ -3,6 +3,7 @@ import urllib.request
 import json
 import polyline
 
+
 def send_request(base_url: str, **params) -> dict:
     """
     Sends a request to the given base URL with query parameters using kwargs.
@@ -16,37 +17,34 @@ def send_request(base_url: str, **params) -> dict:
     """
     # Encode the query parameters
 
-    if 'json' in params:
+    if "json" in params:
         params["json"] = json.dumps(params["json"])
 
     query_string = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-    
+
     # Build the full URL
     full_url = f"{base_url}?{query_string}"
     print(f"Requesting URL: {full_url}")
-    
+
     # Send the request and get the response
     with urllib.request.urlopen(full_url) as response:
         # Read and decode the response
-        response_data = response.read().decode('utf-8')
-        
+        response_data = response.read().decode("utf-8")
+
         # Parse JSON
         json_data = json.loads(response_data)
         return json_data
 
+
 if __name__ == "__main__":
     # Base URL without query parameters
     base_url = "http://192.168.4.23:8010/search"
-    
+
     # Query parameters passed as kwargs
-    params = {
-        "q": "871 shawnee ave",
-        "format": "json",
-        "limit": 100
-    }
-    
+    params = {"q": "871 shawnee ave", "format": "json", "limit": 100}
+
     # Send request and get JSON response
-    
+
     # Print the JSON response
     print(json.dumps(send_request(base_url, **params), indent=4))
 
@@ -79,24 +77,24 @@ if __name__ == "__main__":
                     "exclude_unpaved": 1,
                     "shortest": False,
                     "exclude_cash_only_tolls": False,
-                    "top_speed": 140
+                    "top_speed": 140,
                 }
             },
             "exclude_polygons": [],
             "locations": [
                 {"lon": -87.65579223632814, "lat": 41.789744876718984, "type": "break"},
-                {"lon": -87.67776489257814, "lat": 41.64110468287587, "type": "break"}
+                {"lon": -87.67776489257814, "lat": 41.64110468287587, "type": "break"},
             ],
             "directions_options": {"units": "kilometers"},
-            "id": "valhalla_directions"
+            "id": "valhalla_directions",
         }
     }
 
     resp = send_request(base_url, **params)
     print(json.dumps(resp, indent=4))
 
-    decoded_shape = polyline.decode(resp['trip']['legs'][-1]['shape'], geojson=True)
-    decoded_shape = [[y/10 for y in x]for x in decoded_shape]
+    decoded_shape = polyline.decode(resp["trip"]["legs"][-1]["shape"], geojson=True)
+    decoded_shape = [[y / 10 for y in x] for x in decoded_shape]
 
     # Print decoded points
     for point in decoded_shape:

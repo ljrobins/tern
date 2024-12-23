@@ -18,6 +18,9 @@ let route = null;
 let userHeading = -1; // nonphysical
 let previousUserMarkerLngLat = null;
 let directionLine = null;
+let closestDistanceEver = Number.MAX_VALUE;
+const METERS_TO_MILES = 0.0006213712;
+let headingUpdateDistanceMiles = 5 * METERS_TO_MILES // User must move 5 meters to get a good heading update
 
 // Minimum duration (in milliseconds) to register as a long-tap
 const longTapDuration = 500;
@@ -166,6 +169,8 @@ function trackUser() {
         // Find the closest point on either the previous or next segment
         const closestPointOnSegment = findClosestPointOnSegment(routeCoordinates, closestPointIndex, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
 
+        closestDistanceEver = Math.min(closestPointOnSegment.distance, closestDistanceEver)
+
         const currentManeuverIndex = maneuverIndexOfShapeIndices(closestPointOnSegment.indices)
         const currentManeuver = route.legs[0].maneuvers[currentManeuverIndex];
         let nextManeuver = null;
@@ -189,10 +194,9 @@ function trackUser() {
 
         readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuverIndex);
 
-        positionStdMiles = gpsStdMeters * 0.0006213712; // converting meters to miles
-        distanceRerouteBoundMiles = 3 * positionStdMiles;
+        positionStdMiles = gpsStdMeters * METERS_TO_MILES; // converting meters to miles
 
-        if (closestPointOnSegment.distance > distanceRerouteBoundMiles) {
+        if ((closestPointOnSegment.distance > 10 * positionStdMiles) && (closestDistanceEver < 1 * positionStdMiles)) {
             console.log('time to reroute the user');
             getRoute([userMarker.getLngLat().lat, userMarker.getLngLat().lng], [destinationMarker.getLngLat().lat, destinationMarker.getLngLat().lng]);
             sayPhrase('Re-routing');
@@ -443,19 +447,19 @@ function updateUserPosition(latitude, longitude, accuracy) {
         }
         function onDragEnd() {
             userHeading = computeHeading(previousUserMarkerLngLat.lat, previousUserMarkerLngLat.lng, userMarker.getLngLat().lat, userMarker.getLngLat().lng);
-            console.log('user heading:', userHeading);
+            console.log('Updated heading:', userHeading);
         }
 
         userMarker.on('dragstart', onDragStart);
         userMarker.on('dragend', onDragEnd);
 
     } else {
-        userMarker.setLngLat(coordinates);
+        // userMarker.setLngLat(coordinates);
         // Update the user's heading
         distanceTraveled = haversine(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude)
-        if (distanceTraveled > 0.01) {
+        if (distanceTraveled > headingUpdateDistanceMiles) {
             userHeading = computeHeading(userMarker.getLngLat().lat, userMarker.getLngLat().lng, latitude, longitude);
-            console.log('user heading:', userHeading);    
+            console.log('Updated heading:', userHeading);    
         }
     }
 
