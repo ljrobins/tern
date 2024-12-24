@@ -2,7 +2,6 @@
 const socket = io();
 
 let firstUnixTimestamp = null;
-let locationFit = new QuadraticFit();
 
 // Marker and Circle Layer Initialization
 let userMarker = null;

@@ -38,17 +38,6 @@ def send_request(base_url: str, **params) -> dict:
 
 if __name__ == "__main__":
     # Base URL without query parameters
-    base_url = "http://192.168.4.23:8010/search"
-
-    # Query parameters passed as kwargs
-    params = {"q": "871 shawnee ave", "format": "json", "limit": 100}
-
-    # Send request and get JSON response
-
-    # Print the JSON response
-    print(json.dumps(send_request(base_url, **params), indent=4))
-
-    # Base URL without query parameters
     base_url = "http://192.168.4.23:8002/route"
 
     # Query parameters passed as kwargs
@@ -87,15 +76,16 @@ if __name__ == "__main__":
             ],
             "directions_options": {"units": "kilometers"},
             "id": "valhalla_directions",
+            "elevation_interval": "100",
         }
     }
 
     resp = send_request(base_url, **params)
     print(json.dumps(resp, indent=4))
 
-    decoded_shape = polyline.decode(resp["trip"]["legs"][-1]["shape"], geojson=True)
-    decoded_shape = [[y / 10 for y in x] for x in decoded_shape]
+    # decoded_shape = polyline.decode(resp["trip"]["legs"][-1]["shape"], geojson=True)
+    # decoded_shape = [[y / 10 for y in x] for x in decoded_shape]
 
     # Print decoded points
-    for point in decoded_shape:
-        print(f"Lat: {point[0]}, Lon: {point[1]}")
+    # for point in decoded_shape:
+    #     print(f"Lat: {point[0]}, Lon: {point[1]}")

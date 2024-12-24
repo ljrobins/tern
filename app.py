@@ -98,35 +98,21 @@ def handle_geolocation_update(data):
 # API endpoint to handle search input and return points
 @app.route("/api/search", methods=["GET"])
 def search():
-    user_query = request.args.get("query")  # Get user input
-    if not user_query:
+    q = request.args.get("q")  # Get user input
+    lat = request.args.get("lat")  # Get user input
+    lon = request.args.get("lon")  # Get user input
+    limit = request.args.get("limit")  # Get user input
+    if not q:
         return jsonify({"error": "No query provided"}), 400
 
-    base_url = "http://192.168.4.23:8010/search"  # External API
+    base_url = "http://192.168.4.23:2322/api"  # External API
     try:
         # Call the search API
         response_data, status = send_request(
-            base_url, q=user_query, format="json", limit=100
+            base_url, q=q, limit=limit, lat=lat, lon=lon,
         )
 
-        # Convert the response into Point geometries (GeoJSON FeatureCollection)
-        features = []
-        for result in response_data:
-            if "lat" in result and "lon" in result:  # Ensure lat/lon exist
-                features.append(
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [float(result["lon"]), float(result["lat"])],
-                        },
-                        "properties": {
-                            "name": result.get("display_name", "Unnamed Location")
-                        },
-                    }
-                )
-
-        return jsonify({"type": "FeatureCollection", "features": features})
+        return jsonify(response_data)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

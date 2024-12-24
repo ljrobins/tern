@@ -37,25 +37,88 @@
 
         #map {
             height: calc(100% - 80px);
-            /* Adjust height to account for the banner (44px includes 24px font size + 10px padding) */
+            /* Adjust height to account for the search container */
             margin-top: 80px;
-            /* Push the map below the banner */
+            /* Push the map below the search container */
+            z-index: 10;
         }
 
-        /* Input box styling */
-        #search-box {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            transform: translateX(0%);
+        #search-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            padding: 10px;
+            background-color: black;
+            /* Match the results' background */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
             z-index: 1000;
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            font-size: 14px;
+            /* Ensure it's above other elements */
+            font-family: "Courier New", Courier, monospace;
+            /* Match font */
+            color: white;
+            border-bottom: 2px solid #555;
+            /* Optional: Add a border below the search container */
         }
+
+        #search-box {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            font-family: "Courier New", Courier, monospace;
+            /* Match font */
+            color: white;
+            /* White text */
+            background-color: #222;
+            /* Match the results' background */
+            border: 1px solid #555;
+            /* Match the results' border */
+            border-radius: 5px;
+            outline: none;
+            /* Remove default outline on focus */
+        }
+
+        #search-box::placeholder {
+            color: #aaa;
+            /* Match the results' text color for the placeholder */
+        }
+
+        #results {
+    position: absolute;
+    top: calc(20% + 10px); /* Position directly below the search container with padding */
+    left: 0;
+    width: 100%;
+    background-color: black;
+    font-family: "Courier New", Courier, monospace;
+    color: white;
+    z-index: 1001; /* Ensure it's above the map */
+    max-height: 40%; /* Limit the height of the results */
+    overflow-y: auto; /* Add scrolling if results exceed the height */
+    padding: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+
+        .result {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background-color: #222;
+        }
+
+        .result-title {
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+        }
+
+        .result-details {
+            font-size: 14px;
+            color: #aaa;
+        }
+
 
         #direction-banner {
             position: fixed;
@@ -67,7 +130,7 @@
             font-size: 24px;
             text-align: center;
             padding: 10px 0;
-            z-index: 1000;
+            z-index: 100;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
             height: 60px;
             /* Adjust height to fit two lines */
@@ -98,8 +161,13 @@
     <div id="map"></div>
 
     <!-- Search Input Box -->
-    <input type="text" id="search-box" placeholder="Enter address (e.g., 871 Shawnee Ave)"
-        onkeypress="handleSearch(event)" />
+    <div id="search-container">
+        <input type="text" id="search-box" placeholder="Search for places..." oninput="performSearch(event)">
+        <div id="results"></div>
+    </div>
+
+    <!-- <input type="text" id="search-box" placeholder="Enter address (e.g., 871 Shawnee Ave)"
+        onkeypress="handleSearch(event)" /> -->
 
     <div id="direction-banner">
         <div id="direction-string"></div>
@@ -112,6 +180,7 @@
     <script src="{{url_for('static', filename='map.js')}}"></script>
     <script src="{{url_for('static', filename='geolocation.js')}}"></script>
     <script src="{{url_for('static', filename='audio.js')}}"></script>
+    <script src="{{url_for('static', filename='search.js')}}"></script>
 </body>
 
 </html>

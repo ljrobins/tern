@@ -289,40 +289,40 @@ function initializeMap() {
     });
 }
 
-// Handle search input and send it to the backend
-function handleSearch(event) {
-    if (event.key === "Enter") { // Trigger search on Enter key
-        const query = document.getElementById("search-box").value;
+// // Handle search input and send it to the backend
+// function handleSearch(event) {
+//     if (event.key === "Enter") { // Trigger search on Enter key
+//         const query = document.getElementById("search-box").value;
 
-        if (query) {
-            fetch(`/api/search?query=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log("Search Response:", data);
+//         if (query) {
+//             fetch(`/api/search?query=${encodeURIComponent(query)}`)
+//                 .then(response => response.json())
+//                 .then(data => {
+//                     console.log("Search Response:", data);
 
-                    if (data.error) {
-                        alert("Error: " + data.error);
-                        return;
-                    }
+//                     if (data.error) {
+//                         alert("Error: " + data.error);
+//                         return;
+//                     }
 
-                    // Update the map with the search results (points)
-                    map.getSource('search-results').setData(data);
+//                     // Update the map with the search results (points)
+//                     map.getSource('search-results').setData(data);
 
-                    // Fit the map view to the search results
-                    if (data.features.length > 0) {
-                        const bounds = new maplibregl.LngLatBounds();
-                        data.features.forEach(feature => {
-                            bounds.extend(feature.geometry.coordinates);
-                        });
-                        map.fitBounds(bounds, { padding: 20 });
-                    } else {
-                        alert("No results found.");
-                    }
-                })
-                .catch(error => console.error("Error fetching search data:", error));
-        }
-    }
-}
+//                     // Fit the map view to the search results
+//                     if (data.features.length > 0) {
+//                         const bounds = new maplibregl.LngLatBounds();
+//                         data.features.forEach(feature => {
+//                             bounds.extend(feature.geometry.coordinates);
+//                         });
+//                         map.fitBounds(bounds, { padding: 20 });
+//                     } else {
+//                         alert("No results found.");
+//                     }
+//                 })
+//                 .catch(error => console.error("Error fetching search data:", error));
+//         }
+//     }
+// }
 
 function fitMapToUserLocation(latitude, longitude, bufferDistanceMeters) {
     const earthRadius = 6371000; // Earth radius in meters
