@@ -16,10 +16,29 @@
             height: 100%;
         }
 
+        .custom-orange {
+            color: rgb(225, 50, 50);
+        }
+
+        .custom-grey {
+            color: rgb(128, 128, 128);
+            /* A neutral grey */
+        }
+
+        .custom-white {
+            color: rgb(255, 255, 255);
+            /* Pure white */
+        }
+
+        .custom-black {
+            color: rgb(0, 0, 0);
+            /* Pure black */
+        }
+
         #map {
-            height: calc(100% - 75px);
+            height: calc(100% - 80px);
             /* Adjust height to account for the banner (44px includes 24px font size + 10px padding) */
-            margin-top: 75px;
+            margin-top: 80px;
             /* Push the map below the banner */
         }
 
@@ -50,7 +69,8 @@
             padding: 10px 0;
             z-index: 1000;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-            height: 60px; /* Adjust height to fit two lines */
+            height: 60px;
+            /* Adjust height to fit two lines */
             /* Adjust height dynamically based on content */
             display: flex;
             flex-direction: column;

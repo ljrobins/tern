@@ -160,10 +160,39 @@ function readDirections(currentManeuver, nextManeuver, mfComplete, currentManeuv
         }
     }
 
-    if (!!directionLine) {
-        document.getElementById('direction-string').innerText = directionLine
-        document.getElementById('maneuver-stats').innerText = `(${Math.round(mfComplete * 100)}%)`
-    }
+// Compute distance and time for the current maneuver
+distanceDoneMiles = mfComplete * currentManeuver.length;
+distanceLeftMiles = (1 - mfComplete) * currentManeuver.length;
+
+timeDoneMinutes = mfComplete * currentManeuver.time / 60; // Completed time for the current maneuver
+timeLeftMinutes = (1 - mfComplete) * currentManeuver.time / 60; // Remaining time for the current maneuver
+
+// Compute total time completed for all previous maneuvers and current maneuver up to mfComplete
+let totalTimeDoneMinutes = 0;
+let totalDistanceDoneMiles = 0;
+for (let i = 0; i < currentManeuverIndex; i++) {
+    totalDistanceDoneMiles += route.legs[0].maneuvers[i].length; // Add distance of all completed maneuvers
+    totalTimeDoneMinutes += route.legs[0].maneuvers[i].time / 60; // Add distance of all completed maneuvers
+}
+totalDistanceDoneMiles += distanceDoneMiles; // Add the completed distance for the current maneuver
+totalTimeDoneMinutes += timeDoneMinutes; // Add the completed time for the current maneuver
+
+percentDoneDistance = totalDistanceDoneMiles / route.summary.length * 100 // Percent done with the whole trip in distance
+percentDoneTime = totalTimeDoneMinutes / (route.summary.time/60) * 100 // Percent done with the whole trip in time
+
+if (!!directionLine) {
+    const orangeText = 
+        `M: ${(Math.round(distanceDoneMiles * 10) / 10).toFixed(1)}/${(Math.round(currentManeuver.length * 10) / 10).toFixed(1)} miles (${Math.round(mfComplete * 100)}%) ` +
+        `${(Math.round(timeLeftMinutes * 10) / 10).toFixed(1)} mins, `;
+    
+    const greyText = 
+        `R: ${(Math.round(totalTimeDoneMinutes * 10) / 10).toFixed(1)}/${(Math.round(route.summary.time / 60 * 10) / 10).toFixed(1)} mins (${Math.round(percentDoneTime)}%)`;
+
+    document.getElementById('direction-string').innerText = directionLine;
+    document.getElementById('maneuver-stats').innerHTML = 
+        `<span class="custom-orange">${orangeText}</span><span class="custom-grey">${greyText}</span>`;
+}
+
 }
 
 

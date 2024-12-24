@@ -3,23 +3,6 @@ let userInteracting = false;
 
 initializeMap()
 
-// Function to generate color based on segment length (simple linear scale)
-function getColorForLength(length, maxLength) {
-    // Normalize the length value to a range between 0 and 1
-    const minLength = 0; // Minimum length (adjust this as needed)
-
-    // Normalize the length
-    const normalizedLength = Math.min(Math.max((length - minLength) / (maxLength - minLength), 0), 1);
-
-    // Linear gradient from blue (short segments) to red (long segments)
-    const r = Math.floor(255 * normalizedLength);
-    const g = 0;
-    const b = Math.floor(255 * (1 - normalizedLength));
-
-    return `rgb(${r}, ${g}, ${b})`; // Return the color in RGB format
-}
-
-
 // Function to zoom to fit an existing layer by name
 function zoomToFitLayer(layerName) {
     // Get the source associated with the layer
@@ -99,15 +82,6 @@ function getRoute(start, end) {
 
             // Step 1: Calculate the maximum length within the route
 
-            route.legs[0].maneuvers.forEach(maneuver => {
-                console.log(maneuver)
-            });
-
-            let maxLength = 0;
-            route.legs[0].maneuvers.forEach(maneuver => {
-                maxLength = Math.max(maxLength, maneuver.length / (maneuver.time + 1));
-            });
-
             // Group all segments into a single GeoJSON source
             const routeFeatures = [];
 
@@ -118,10 +92,7 @@ function getRoute(start, end) {
                 for (let j = maneuver.begin_shape_index; j <= maneuver.end_shape_index; j++) {
                     segmentCoordinates.push(route.shape[j]);
                 }
-
-                // Generate the color for this segment based on its length
-                const segmentLength = maneuver.length / (maneuver.time + 1);
-                const segmentColor = getColorForLength(segmentLength, maxLength);
+                const segmentColor = `rgb(225, 50, 50)`
 
                 // Add this segment as a feature in the route features array
                 const geoJSONSegment = {
@@ -134,7 +105,6 @@ function getRoute(start, end) {
                         color: segmentColor // Store the color for each segment
                     }
                 };
-
                 routeFeatures.push(geoJSONSegment);
             });
 
@@ -162,7 +132,6 @@ function getRoute(start, end) {
                     source: 'route',
                     paint: {
                         'line-width': 4,
-                        // Use the 'color' property for the line color
                         'line-color': ['get', 'color'] // Get the color for each segment from the properties
                     }
                 });
